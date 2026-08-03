@@ -30,7 +30,7 @@ export default function Stringing() {
   }, []);
 
   const canSubmit =
-    clientName && contactValue && racketDescription && stringId && tension && requestedDate && paymentMethod;
+    clientName && contactValue && stringId && tension && requestedDate && paymentMethod;
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -80,6 +80,7 @@ export default function Stringing() {
   return (
     <div className="page">
       <header className="site-header">
+        <img src="/logo.png" alt="ARK Tennis" className="brand-logo" />
         <span className="club">ARK Tennis</span>
         <h1>Racket Stringing</h1>
         <p>Tell us the racket, string, and tension — we'll take it from there.</p>
@@ -106,7 +107,7 @@ export default function Stringing() {
         </div>
 
         <div className="field">
-          <label>Racket (brand / model)</label>
+          <label>Racket (brand / model) — optional</label>
           <input value={racketDescription} onChange={(e) => setRacketDescription(e.target.value)} placeholder="e.g. Wilson Blade 98 16x19" />
         </div>
 

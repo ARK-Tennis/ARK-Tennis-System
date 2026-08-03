@@ -31,11 +31,12 @@ export default function App() {
   return (
     <div className="page">
       <header className="site-header">
+        <img src="/logo.png" alt="ARK Tennis" className="brand-logo" />
         <div className="brand-mark">
           <span className="club">Rohnert Park, CA</span>
         </div>
         <h1>ARK Tennis</h1>
-        <p>Book a clinic, choose your plan, and pick your slot.</p>
+        <p>Book a clinic, choose your plan and get on court.</p>
         <div className="net-cord" />
       </header>
 
@@ -78,7 +79,7 @@ export default function App() {
       {selected && <BookingForm clinic={selected} grips={grips} />}
 
       <nav className="footer-nav">
-        <Link to="/stringing">Book a Racket Stringing →</Link>
+        <Link to="/stringing" className="stringing-link">Book a Racket Stringing →</Link>
       </nav>
     </div>
   );

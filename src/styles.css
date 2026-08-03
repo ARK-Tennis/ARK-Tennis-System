@@ -330,6 +330,22 @@ a { color: inherit; }
 }
 .footer-nav a:hover { color: var(--ink); }
 
+.footer-nav a.stringing-link {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.footer-nav a.stringing-link:hover { color: var(--brass); }
+
+.brand-logo {
+  display: block;
+  height: 56px;
+  width: auto;
+  margin-bottom: 12px;
+}
+
 .empty-state, .loading-state {
   padding: 40px 20px;
   text-align: center;
