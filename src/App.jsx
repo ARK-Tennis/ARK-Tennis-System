@@ -75,7 +75,7 @@ export default function App() {
       {selected && <BookingForm clinic={selected} grips={grips} />}
 
       <nav className="footer-nav">
-        <Link to="/stringing" className="stringing-link">Book a Racket Stringing →</Link>
+        <Link to="/stringing" className="stringing-link">String a Racket</Link>
       </nav>
     </div>
   );
