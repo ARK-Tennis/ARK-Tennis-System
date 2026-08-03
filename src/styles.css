@@ -46,6 +46,7 @@ a { color: inherit; }
   padding: 28px 20px 24px;
   position: relative;
   overflow: hidden;
+  text-align: center;
 }
 
 .site-header::after {
@@ -341,9 +342,9 @@ a { color: inherit; }
 
 .brand-logo {
   display: block;
-  height: 56px;
+  height: 84px;
   width: auto;
-  margin-bottom: 12px;
+  margin: 0 auto 12px;
 }
 
 .empty-state, .loading-state {

@@ -13,7 +13,7 @@ export default function Status() {
   return (
     <div className="page">
       <header className="site-header">
-        <span className="club">ARK Tennis</span>
+        <img src="/logo.png" alt="ARK Tennis" className="brand-logo" />
         <h1>Booking Status</h1>
         <div className="net-cord" />
       </header>

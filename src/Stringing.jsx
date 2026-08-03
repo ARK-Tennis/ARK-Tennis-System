@@ -81,7 +81,6 @@ export default function Stringing() {
     <div className="page">
       <header className="site-header">
         <img src="/logo.png" alt="ARK Tennis" className="brand-logo" />
-        <span className="club">ARK Tennis</span>
         <h1>Racket Stringing</h1>
         <p>Tell us the racket, string, and tension — we'll take it from there.</p>
         <div className="net-cord" />

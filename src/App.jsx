@@ -32,11 +32,7 @@ export default function App() {
     <div className="page">
       <header className="site-header">
         <img src="/logo.png" alt="ARK Tennis" className="brand-logo" />
-        <div className="brand-mark">
-          <span className="club">Rohnert Park, CA</span>
-        </div>
-        <h1>ARK Tennis</h1>
-        <p>Book a clinic, choose your plan and get on court.</p>
+        <p>Book a clinic, re-string a racket, and get on court.</p>
         <div className="net-cord" />
       </header>
 
