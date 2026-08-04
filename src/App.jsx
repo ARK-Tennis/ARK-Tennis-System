@@ -93,10 +93,13 @@ function BookingForm({ clinic, grips }) {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [packLookup, setPackLookup] = useState(null); // null = not checked, {found:false} or {found:true,...}
+  const [checkingPack, setCheckingPack] = useState(false);
 
   useEffect(() => {
     setSelectedDate('');
     setResult(null);
+    setPackLookup(null);
     if (mode === 'single') {
       setLoadingSlots(true);
       apiGet('slots', { clinicId: clinic.clinicId, weeks: 6 }).then((data) => {
@@ -106,13 +109,52 @@ function BookingForm({ clinic, grips }) {
     }
   }, [mode, clinic]);
 
+  // Once we know we're using an existing pack, we still need open slots to pick a date from.
+  useEffect(() => {
+    if (packLookup?.found) {
+      setLoadingSlots(true);
+      apiGet('slots', { clinicId: clinic.clinicId, weeks: 6 }).then((data) => {
+        setSlots(Array.isArray(data) ? data : []);
+        setLoadingSlots(false);
+      });
+    }
+  }, [packLookup, clinic]);
+
+  async function checkForExistingPack() {
+    if (!contactValue) return;
+    setCheckingPack(true);
+    const res = await apiGet('myPack', { clinicId: clinic.clinicId, contactValue });
+    setPackLookup(res);
+    setCheckingPack(false);
+  }
+
+  const buyingNewPack = mode === 'pack' && packLookup?.found === false;
+  const usingExistingPack = mode === 'pack' && packLookup?.found === true;
+
   const canSubmit =
-    clientName && contactValue && paymentMethod && (mode === 'pack' || selectedDate);
+    mode === 'single'
+      ? clientName && contactValue && paymentMethod && selectedDate
+      : usingExistingPack
+      ? selectedDate
+      : buyingNewPack
+      ? clientName && contactValue && paymentMethod
+      : false;
 
   async function handleSubmit() {
     setSubmitting(true);
     try {
-      if (mode === 'pack') {
+      if (usingExistingPack) {
+        const res = await apiPost('signup', {
+          clinicId: clinic.clinicId,
+          clientName,
+          contactMethod,
+          contactValue,
+          planType: 'pack',
+          packId: packLookup.packId,
+          sessionDate: selectedDate,
+        });
+        setResult({ type: 'single', ...res });
+      } else if (buyingNewPack) {
         const res = await apiPost('buyPack', {
           clinicId: clinic.clinicId,
           clientName,
@@ -189,48 +231,131 @@ function BookingForm({ clinic, grips }) {
         </div>
       )}
 
-      <div className="field">
-        <label>Your Name</label>
-        <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Full name" />
-      </div>
+      {mode === 'single' && (
+        <>
+          <div className="field">
+            <label>Your Name</label>
+            <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Full name" />
+          </div>
 
-      <div className="field">
-        <label>Contact via</label>
-        <div className="option-row">
-          <div className={`option-pill ${contactMethod === 'email' ? 'active' : ''}`} onClick={() => setContactMethod('email')}>Email</div>
-          <div className={`option-pill ${contactMethod === 'phone' ? 'active' : ''}`} onClick={() => setContactMethod('phone')}>Phone</div>
-        </div>
-      </div>
-
-      <div className="field">
-        <label>{contactMethod === 'email' ? 'Email Address' : 'Phone Number'}</label>
-        <input
-          value={contactValue}
-          onChange={(e) => setContactValue(e.target.value)}
-          placeholder={contactMethod === 'email' ? 'you@example.com' : '(707) 555-1234'}
-        />
-      </div>
-
-      <div className="field">
-        <label>Payment Method</label>
-        <div className="option-row">
-          {PAYMENT_METHODS.map((m) => (
-            <div
-              key={m.id}
-              className={`option-pill ${paymentMethod === m.id ? 'active' : ''}`}
-              onClick={() => setPaymentMethod(m.id)}
-            >
-              {m.label}
+          <div className="field">
+            <label>Contact via</label>
+            <div className="option-row">
+              <div className={`option-pill ${contactMethod === 'email' ? 'active' : ''}`} onClick={() => setContactMethod('email')}>Email</div>
+              <div className={`option-pill ${contactMethod === 'phone' ? 'active' : ''}`} onClick={() => setContactMethod('phone')}>Phone</div>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+
+          <div className="field">
+            <label>{contactMethod === 'email' ? 'Email Address' : 'Phone Number'}</label>
+            <input
+              value={contactValue}
+              onChange={(e) => setContactValue(e.target.value)}
+              placeholder={contactMethod === 'email' ? 'you@example.com' : '(707) 555-1234'}
+            />
+          </div>
+
+          <div className="field">
+            <label>Payment Method</label>
+            <div className="option-row">
+              {PAYMENT_METHODS.map((m) => (
+                <div
+                  key={m.id}
+                  className={`option-pill ${paymentMethod === m.id ? 'active' : ''}`}
+                  onClick={() => setPaymentMethod(m.id)}
+                >
+                  {m.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {mode === 'pack' && packLookup === null && (
+        <>
+          <div className="field">
+            <label>Your Name</label>
+            <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Full name" />
+          </div>
+
+          <div className="field">
+            <label>Contact via</label>
+            <div className="option-row">
+              <div className={`option-pill ${contactMethod === 'email' ? 'active' : ''}`} onClick={() => setContactMethod('email')}>Email</div>
+              <div className={`option-pill ${contactMethod === 'phone' ? 'active' : ''}`} onClick={() => setContactMethod('phone')}>Phone</div>
+            </div>
+          </div>
+
+          <div className="field">
+            <label>{contactMethod === 'email' ? 'Email Address' : 'Phone Number'}</label>
+            <input
+              value={contactValue}
+              onChange={(e) => setContactValue(e.target.value)}
+              placeholder={contactMethod === 'email' ? 'you@example.com' : '(707) 555-1234'}
+            />
+          </div>
+
+          <button className="submit-btn" disabled={!contactValue || checkingPack} onClick={checkForExistingPack}>
+            {checkingPack ? 'Checking…' : 'Continue'}
+          </button>
+        </>
+      )}
+
+      {usingExistingPack && (
+        <>
+          <div className="confirmation" style={{ margin: 0 }}>
+            <p style={{ margin: 0 }}>
+              You have <strong>{packLookup.sessionsRemaining}</strong> session{packLookup.sessionsRemaining === 1 ? '' : 's'} left,
+              valid until <strong>{packLookup.expiryDate}</strong>.
+            </p>
+          </div>
+          <div className="field">
+            <label>Date</label>
+            {loadingSlots && <div className="loading-state">Loading open dates…</div>}
+            {!loadingSlots && (
+              <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}>
+                <option value="">Choose a date</option>
+                {slots.map((s) => (
+                  <option key={s.date} value={s.date} disabled={s.spotsLeft <= 0}>
+                    {s.date} — {s.spotsLeft > 0 ? `${s.spotsLeft} spots left` : 'Full'}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </>
+      )}
+
+      {buyingNewPack && (
+        <>
+          <div className="empty-state" style={{ padding: '8px 0' }}>
+            No active pack found for that contact — buy a new {clinic.packSize}-session pack below.
+          </div>
+          <div className="field">
+            <label>Payment Method</label>
+            <div className="option-row">
+              {PAYMENT_METHODS.map((m) => (
+                <div
+                  key={m.id}
+                  className={`option-pill ${paymentMethod === m.id ? 'active' : ''}`}
+                  onClick={() => setPaymentMethod(m.id)}
+                >
+                  {m.label}
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {result?.type === 'error' && <div className="empty-state" style={{ color: 'var(--error)' }}>{result.message}</div>}
 
-      <button className="submit-btn" disabled={!canSubmit || submitting} onClick={handleSubmit}>
-        {submitting ? 'Booking…' : mode === 'pack' ? 'Buy Pack' : 'Confirm Booking'}
-      </button>
+      {(mode === 'single' || usingExistingPack || buyingNewPack) && (
+        <button className="submit-btn" disabled={!canSubmit || submitting} onClick={handleSubmit}>
+          {submitting ? 'Booking…' : usingExistingPack ? 'Book Session' : buyingNewPack ? 'Buy Pack' : 'Confirm Booking'}
+        </button>
+      )}
     </div>
   );
 }
@@ -240,7 +365,9 @@ function Confirmation({ result }) {
   return (
     <div className="confirmation">
       <h3>You're booked!</h3>
-      {typeof link === 'string' ? (
+      {!link ? (
+        <p>This session is covered by your pack — nothing more to pay.</p>
+      ) : typeof link === 'string' ? (
         <>
           <p>Complete payment via Venmo to finish your booking.</p>
           <a className="pay-link" href={link} target="_blank" rel="noreferrer">Pay on Venmo</a>
