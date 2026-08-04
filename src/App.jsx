@@ -32,7 +32,7 @@ export default function App() {
     <div className="page">
       <header className="site-header">
         <img src="/logo.png" alt="ARK Tennis" className="brand-logo" />
-        <p>Book a clinic, re-string a racket, and get on court.</p>
+        <p>Book a clinic, string a racket, and get on court</p>
         <div className="net-cord" />
       </header>
 
