@@ -72,6 +72,11 @@ export default function App() {
         ))}
       </div>
 
+      {selected && (
+        <div className="booking-form" style={{ paddingBottom: 0 }}>
+          {selected.description && <p style={{ color: 'var(--muted)', fontSize: 14, margin: '0 0 4px' }}>{selected.description}</p>}
+        </div>
+      )}
       {selected && <BookingForm clinic={selected} grips={grips} />}
 
       <nav className="footer-nav">
