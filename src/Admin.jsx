@@ -108,8 +108,8 @@ function labelFor(t) {
 }
 
 const SHEET_META = {
-  signups: { idCol: 'SignupID', columns: ['ClientName', 'ClinicID', 'SessionDate', 'PlanType', 'PaymentMethod', 'PaymentStatus', 'Source'] },
-  packs: { idCol: 'PackId', columns: ['ClientName', 'ClinicId', 'SessionsRemaining', 'ExpiryDate', 'PricePaid', 'PaymentMethod', 'PaymentStatus'] },
+  signups: { idCol: 'SignupID', columns: ['ClientName', 'ChildName', 'ClinicID', 'SessionDate', 'PlanType', 'PaymentMethod', 'PaymentStatus', 'Source'] },
+  packs: { idCol: 'PackId', columns: ['ClientName', 'ChildName', 'ClinicId', 'SessionsRemaining', 'ExpiryDate', 'PricePaid', 'PaymentMethod', 'PaymentStatus'] },
   stringingOrders: { idCol: 'OrderID', columns: ['ClientName', 'RacketDescription', 'StringID', 'Tension', 'RequestedCompletionDate', 'PaymentMethod', 'PaymentStatus', 'Status'] },
   makeupCredits: { idCol: 'CreditID', columns: ['ClientName', 'OriginClinicID', 'OriginDate', 'Status', 'ExpiryDate'] },
 };
@@ -164,7 +164,7 @@ function WalkInForm({ token, clinics, onAdded }) {
   const [open, setOpen] = useState(false);
   const [clinicId, setClinicId] = useState('');
   const [clientName, setClientName] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentMethod, setPaymentMethod] = useState('other');
   const [sessionDate] = useState(new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
 
@@ -204,7 +204,7 @@ function WalkInForm({ token, clinics, onAdded }) {
       <div className="field">
         <label>Payment Method</label>
         <div className="option-row">
-          {['venmo', 'zelle', 'cash', 'check'].map((m) => (
+          {['venmo', 'zelle', 'other'].map((m) => (
             <div key={m} className={`option-pill ${paymentMethod === m ? 'active' : ''}`} onClick={() => setPaymentMethod(m)}>
               {m[0].toUpperCase() + m.slice(1)}
             </div>

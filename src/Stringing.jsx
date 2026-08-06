@@ -5,8 +5,7 @@ import { apiGet, apiPost } from './api.js';
 const PAYMENT_METHODS = [
   { id: 'venmo', label: 'Venmo' },
   { id: 'zelle', label: 'Zelle' },
-  { id: 'cash', label: 'Cash' },
-  { id: 'check', label: 'Check' },
+  { id: 'other', label: 'Other' },
 ];
 
 export default function Stringing() {
@@ -61,10 +60,8 @@ export default function Stringing() {
             <a className="pay-link" href={link} target="_blank" rel="noreferrer">Pay on Venmo</a>
           ) : link?.type === 'zelle-info' ? (
             <p>Send <strong>${link.amount}</strong> via Zelle to <strong>{link.info}</strong>.</p>
-          ) : link?.type === 'check-instructions' ? (
-            <p>Bring a check for <strong>${link.amount}</strong> at drop-off or pickup.</p>
           ) : (
-            <p>Bring <strong>${link?.amount}</strong> cash at drop-off or pickup.</p>
+            <p>We'll follow up about payment for <strong>${link?.amount}</strong> at drop-off or pickup.</p>
           )}
           {result.statusLink && (
             <p style={{ fontSize: 13, marginTop: 12 }}>

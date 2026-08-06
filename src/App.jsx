@@ -5,8 +5,7 @@ import { apiGet, apiPost } from './api.js';
 const PAYMENT_METHODS = [
   { id: 'venmo', label: 'Venmo' },
   { id: 'zelle', label: 'Zelle' },
-  { id: 'cash', label: 'Cash' },
-  { id: 'check', label: 'Check' },
+  { id: 'other', label: 'Other' },
 ];
 
 export default function App() {
@@ -93,6 +92,7 @@ function BookingForm({ clinic, grips }) {
   const [selectedDate, setSelectedDate] = useState('');
   const [gripAddOn, setGripAddOn] = useState('');
   const [clientName, setClientName] = useState('');
+  const [childName, setChildName] = useState('');
   const [contactMethod, setContactMethod] = useState('email');
   const [contactValue, setContactValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
@@ -136,13 +136,15 @@ function BookingForm({ clinic, grips }) {
   const buyingNewPack = mode === 'pack' && packLookup?.found === false;
   const usingExistingPack = mode === 'pack' && packLookup?.found === true;
 
+  const isJunior = clinic.category === 'Junior';
+
   const canSubmit =
     mode === 'single'
-      ? clientName && contactValue && paymentMethod && selectedDate
+      ? clientName && contactValue && paymentMethod && selectedDate && (!isJunior || childName)
       : usingExistingPack
-      ? selectedDate
+      ? selectedDate && (!isJunior || childName)
       : buyingNewPack
-      ? clientName && contactValue && paymentMethod
+      ? clientName && contactValue && paymentMethod && (!isJunior || childName)
       : false;
 
   async function handleSubmit() {
@@ -152,6 +154,7 @@ function BookingForm({ clinic, grips }) {
         const res = await apiPost('signup', {
           clinicId: clinic.clinicId,
           clientName,
+          childName,
           contactMethod,
           contactValue,
           planType: 'pack',
@@ -163,6 +166,7 @@ function BookingForm({ clinic, grips }) {
         const res = await apiPost('buyPack', {
           clinicId: clinic.clinicId,
           clientName,
+          childName,
           contactMethod,
           contactValue,
           paymentMethod,
@@ -172,6 +176,7 @@ function BookingForm({ clinic, grips }) {
         const res = await apiPost('signup', {
           clinicId: clinic.clinicId,
           clientName,
+          childName,
           contactMethod,
           contactValue,
           planType: 'single',
@@ -239,9 +244,16 @@ function BookingForm({ clinic, grips }) {
       {mode === 'single' && (
         <>
           <div className="field">
-            <label>Your Name</label>
+            <label>{isJunior ? "Parent / Guardian Name" : "Your Name"}</label>
             <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Full name" />
           </div>
+
+          {isJunior && (
+            <div className="field">
+              <label>Child's Name</label>
+              <input value={childName} onChange={(e) => setChildName(e.target.value)} placeholder="Player's name" />
+            </div>
+          )}
 
           <div className="field">
             <label>Contact via</label>
@@ -280,9 +292,16 @@ function BookingForm({ clinic, grips }) {
       {mode === 'pack' && packLookup === null && (
         <>
           <div className="field">
-            <label>Your Name</label>
+            <label>{isJunior ? "Parent / Guardian Name" : "Your Name"}</label>
             <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Full name" />
           </div>
+
+          {isJunior && (
+            <div className="field">
+              <label>Child's Name</label>
+              <input value={childName} onChange={(e) => setChildName(e.target.value)} placeholder="Player's name" />
+            </div>
+          )}
 
           <div className="field">
             <label>Contact via</label>
@@ -379,10 +398,8 @@ function Confirmation({ result }) {
         </>
       ) : link?.type === 'zelle-info' ? (
         <p>Send <strong>${link.amount}</strong> via Zelle to <strong>{link.info}</strong>.</p>
-      ) : link?.type === 'check-instructions' ? (
-        <p>Please bring a check for <strong>${link.amount}</strong> to your first session.</p>
       ) : (
-        <p>Please bring <strong>${link?.amount}</strong> cash to your first session.</p>
+        <p>We'll follow up about payment for <strong>${link?.amount}</strong> — cash, check, or another method, whatever works best.</p>
       )}
       {result.statusLink && (
         <p style={{ fontSize: 13, marginTop: 12 }}>
