@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPost } from './api.js';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const PAYMENT_METHODS = [
   { id: 'venmo', label: 'Venmo' },
   { id: 'zelle', label: 'Zelle' },
@@ -29,7 +31,7 @@ export default function Stringing() {
   }, []);
 
   const canSubmit =
-    clientName && contactValue && stringId && tension && requestedDate && paymentMethod;
+    clientName && EMAIL_PATTERN.test(contactValue) && stringId && tension && requestedDate && paymentMethod;
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -90,16 +92,8 @@ export default function Stringing() {
         </div>
 
         <div className="field">
-          <label>Contact via</label>
-          <div className="option-row">
-            <div className={`option-pill ${contactMethod === 'email' ? 'active' : ''}`} onClick={() => setContactMethod('email')}>Email</div>
-            <div className={`option-pill ${contactMethod === 'phone' ? 'active' : ''}`} onClick={() => setContactMethod('phone')}>Phone</div>
-          </div>
-        </div>
-
-        <div className="field">
-          <label>{contactMethod === 'email' ? 'Email Address' : 'Phone Number'}</label>
-          <input value={contactValue} onChange={(e) => setContactValue(e.target.value)} />
+          <label>Email Address</label>
+          <input type="email" value={contactValue} onChange={(e) => setContactValue(e.target.value)} placeholder="you@example.com" />
         </div>
 
         <div className="field">

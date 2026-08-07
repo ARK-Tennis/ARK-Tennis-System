@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPost } from './api.js';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const PAYMENT_METHODS = [
   { id: 'venmo', label: 'Venmo' },
   { id: 'zelle', label: 'Zelle' },
@@ -138,13 +140,15 @@ function BookingForm({ clinic, grips }) {
 
   const isJunior = clinic.category === 'Junior';
 
+  const validEmail = EMAIL_PATTERN.test(contactValue);
+
   const canSubmit =
     mode === 'single'
-      ? clientName && contactValue && paymentMethod && selectedDate && (!isJunior || childName)
+      ? clientName && validEmail && paymentMethod && selectedDate && (!isJunior || childName)
       : usingExistingPack
       ? selectedDate && (!isJunior || childName)
       : buyingNewPack
-      ? clientName && contactValue && paymentMethod && (!isJunior || childName)
+      ? clientName && validEmail && paymentMethod && (!isJunior || childName)
       : false;
 
   async function handleSubmit() {
@@ -256,19 +260,12 @@ function BookingForm({ clinic, grips }) {
           )}
 
           <div className="field">
-            <label>Contact via</label>
-            <div className="option-row">
-              <div className={`option-pill ${contactMethod === 'email' ? 'active' : ''}`} onClick={() => setContactMethod('email')}>Email</div>
-              <div className={`option-pill ${contactMethod === 'phone' ? 'active' : ''}`} onClick={() => setContactMethod('phone')}>Phone</div>
-            </div>
-          </div>
-
-          <div className="field">
-            <label>{contactMethod === 'email' ? 'Email Address' : 'Phone Number'}</label>
+            <label>Email Address</label>
             <input
+              type="email"
               value={contactValue}
               onChange={(e) => setContactValue(e.target.value)}
-              placeholder={contactMethod === 'email' ? 'you@example.com' : '(707) 555-1234'}
+              placeholder="you@example.com"
             />
           </div>
 
@@ -304,23 +301,16 @@ function BookingForm({ clinic, grips }) {
           )}
 
           <div className="field">
-            <label>Contact via</label>
-            <div className="option-row">
-              <div className={`option-pill ${contactMethod === 'email' ? 'active' : ''}`} onClick={() => setContactMethod('email')}>Email</div>
-              <div className={`option-pill ${contactMethod === 'phone' ? 'active' : ''}`} onClick={() => setContactMethod('phone')}>Phone</div>
-            </div>
-          </div>
-
-          <div className="field">
-            <label>{contactMethod === 'email' ? 'Email Address' : 'Phone Number'}</label>
+            <label>Email Address</label>
             <input
+              type="email"
               value={contactValue}
               onChange={(e) => setContactValue(e.target.value)}
-              placeholder={contactMethod === 'email' ? 'you@example.com' : '(707) 555-1234'}
+              placeholder="you@example.com"
             />
           </div>
 
-          <button className="submit-btn" disabled={!contactValue || checkingPack} onClick={checkForExistingPack}>
+          <button className="submit-btn" disabled={!EMAIL_PATTERN.test(contactValue) || checkingPack} onClick={checkForExistingPack}>
             {checkingPack ? 'Checking…' : 'Continue'}
           </button>
         </>

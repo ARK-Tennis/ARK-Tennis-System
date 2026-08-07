@@ -55,12 +55,14 @@ export default function Admin() {
 function Dashboard({ token }) {
   const [data, setData] = useState(null);
   const [clinics, setClinics] = useState([]);
+  const [adminClinics, setAdminClinics] = useState([]);
   const [tab, setTab] = useState('signups');
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     apiGet('adminBookings', { token }).then(setData);
     apiGet('clinics').then((c) => setClinics(Array.isArray(c) ? c : []));
+    apiGet('adminClinics', { token }).then((c) => setAdminClinics(Array.isArray(c) ? c : []));
   }, [token, refreshKey]);
 
   function refresh() {
@@ -85,26 +87,30 @@ function Dashboard({ token }) {
       <WalkInForm token={token} clinics={clinics} onAdded={refresh} />
 
       <div className="category-toggle" style={{ margin: '20px 20px 4px' }}>
-        {['signups', 'packs', 'stringingOrders', 'makeupCredits'].map((t) => (
+        {['signups', 'packs', 'stringingOrders', 'makeupCredits', 'clinics'].map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
             {labelFor(t)}
           </button>
         ))}
       </div>
 
-      <div style={{ padding: '16px 20px 40px', overflowX: 'auto' }}>
-        <DataTable
-          rows={data[tab] || []}
-          tab={tab}
-          onMarkPaid={markPaid}
-        />
-      </div>
+      {tab === 'clinics' ? (
+        <ClinicsEditor token={token} clinics={adminClinics} onSaved={refresh} />
+      ) : (
+        <div style={{ padding: '16px 20px 40px', overflowX: 'auto' }}>
+          <DataTable
+            rows={data[tab] || []}
+            tab={tab}
+            onMarkPaid={markPaid}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
 function labelFor(t) {
-  return { signups: 'Bookings', packs: 'Packs', stringingOrders: 'Stringing', makeupCredits: 'Makeup Credits' }[t];
+  return { signups: 'Bookings', packs: 'Packs', stringingOrders: 'Stringing', makeupCredits: 'Makeup Credits', clinics: 'Clinics' }[t];
 }
 
 const SHEET_META = {
@@ -158,6 +164,70 @@ function DataTable({ rows, tab, onMarkPaid }) {
 
 function tabToSheetName(tab) {
   return { signups: 'Signups', packs: 'Packs', stringingOrders: 'StringingOrders', makeupCredits: 'MakeupCredits' }[tab];
+}
+
+function ClinicsEditor({ token, clinics, onSaved }) {
+  const [edits, setEdits] = useState({}); // clinicId -> { sessionPrice, packPrice }
+  const [savingId, setSavingId] = useState(null);
+
+  function setField(clinicId, field, value) {
+    setEdits((prev) => ({ ...prev, [clinicId]: { ...prev[clinicId], [field]: value } }));
+  }
+
+  async function save(clinicId) {
+    setSavingId(clinicId);
+    await apiPost('updateClinic', { token, clinicId, ...edits[clinicId] });
+    setSavingId(null);
+    setEdits((prev) => ({ ...prev, [clinicId]: {} }));
+    onSaved();
+  }
+
+  if (!clinics || clinics.length === 0) return <div className="empty-state">No clinics found.</div>;
+
+  return (
+    <div style={{ padding: '16px 20px 40px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {clinics.map((c) => {
+        const edit = edits[c.clinicId] || {};
+        return (
+          <div key={c.clinicId} className="clinic-card" style={{ cursor: 'default', flexWrap: 'wrap', gap: 12 }}>
+            <div className="info" style={{ flex: '1 1 220px' }}>
+              <span className="clinic-day">{c.dayOfWeek}</span>
+              <h3>{c.name}{!c.active && ' (inactive)'}</h3>
+              <span className="time">{c.startTime} – {c.endTime}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Session Price</label>
+                <input
+                  type="number"
+                  style={{ width: 90, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                  value={edit.sessionPrice ?? c.sessionPrice}
+                  onChange={(e) => setField(c.clinicId, 'sessionPrice', e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Pack Price</label>
+                <input
+                  type="number"
+                  style={{ width: 90, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                  value={edit.packPrice ?? c.packPrice}
+                  onChange={(e) => setField(c.clinicId, 'packPrice', e.target.value)}
+                />
+              </div>
+              <button
+                className="option-pill"
+                style={{ padding: '10px 14px' }}
+                disabled={!edits[c.clinicId] || savingId === c.clinicId}
+                onClick={() => save(c.clinicId)}
+              >
+                {savingId === c.clinicId ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function WalkInForm({ token, clinics, onAdded }) {
