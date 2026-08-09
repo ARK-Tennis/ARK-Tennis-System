@@ -85,6 +85,7 @@ function Dashboard({ token }) {
       </header>
 
       <WalkInForm token={token} clinics={clinics} onAdded={refresh} />
+      <CancelClassForm token={token} clinics={clinics} onCancelled={refresh} />
 
       <div className="category-toggle" style={{ margin: '20px 20px 4px' }}>
         {['signups', 'packs', 'stringingOrders', 'makeupCredits', 'clinics'].map((t) => (
@@ -226,6 +227,103 @@ function ClinicsEditor({ token, clinics, onSaved }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function CancelClassForm({ token, clinics, onCancelled }) {
+  const [open, setOpen] = useState(false);
+  const [clinicId, setClinicId] = useState('');
+  const [slots, setSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [date, setDate] = useState('');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    setDate('');
+    setResult(null);
+    if (clinicId) {
+      setLoadingSlots(true);
+      apiGet('slots', { clinicId, weeks: 4 }).then((data) => {
+        setSlots(Array.isArray(data) ? data : []);
+        setLoadingSlots(false);
+      });
+    }
+  }, [clinicId]);
+
+  async function submit() {
+    setSubmitting(true);
+    const res = await apiPost('cancelClinic', { token, clinicId, date, reason });
+    setSubmitting(false);
+    setResult(res);
+    onCancelled();
+  }
+
+  if (!open) {
+    return (
+      <div style={{ padding: '8px 20px 0' }}>
+        <button
+          className="submit-btn"
+          style={{ background: 'var(--error)' }}
+          onClick={() => setOpen(true)}
+        >
+          Cancel an Upcoming Class
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="booking-form" style={{ paddingTop: 16 }}>
+      <div className="field">
+        <label>Clinic</label>
+        <select value={clinicId} onChange={(e) => setClinicId(e.target.value)}>
+          <option value="">Choose a clinic</option>
+          {clinics.map((c) => (
+            <option key={c.clinicId} value={c.clinicId}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {clinicId && (
+        <div className="field">
+          <label>Date to Cancel</label>
+          {loadingSlots && <div className="loading-state">Loading upcoming dates…</div>}
+          {!loadingSlots && (
+            <select value={date} onChange={(e) => setDate(e.target.value)}>
+              <option value="">Choose a date</option>
+              {slots.map((s) => (
+                <option key={s.date} value={s.date}>{s.date}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
+
+      <div className="field">
+        <label>Reason (included in the email to players)</label>
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Rain" />
+      </div>
+
+      {result && !result.error && (
+        <div className="confirmation" style={{ margin: 0 }}>
+          <p style={{ margin: 0 }}>
+            Cancelled. {result.affectedCount} player{result.affectedCount === 1 ? '' : 's'} notified by email
+            and issued a makeup credit.
+          </p>
+        </div>
+      )}
+
+      <div className="option-row">
+        <button className="submit-btn" style={{ background: 'var(--error)' }} disabled={!clinicId || !date || submitting} onClick={submit}>
+          {submitting ? 'Cancelling…' : 'Confirm Cancellation'}
+        </button>
+        <button className="submit-btn" style={{ background: 'var(--line)', color: 'var(--charcoal)' }} onClick={() => setOpen(false)}>
+          Close
+        </button>
+      </div>
     </div>
   );
 }
