@@ -24,6 +24,15 @@ export default function Stringing() {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [credit, setCredit] = useState(null);
+
+  useEffect(() => {
+    if (EMAIL_PATTERN.test(contactValue)) {
+      apiGet('myStringingCredit', { contactValue }).then(setCredit);
+    } else {
+      setCredit(null);
+    }
+  }, [contactValue]);
 
   useEffect(() => {
     apiGet('strings').then((data) => setStrings(Array.isArray(data) ? data : []));
@@ -39,6 +48,7 @@ export default function Stringing() {
       const res = await apiPost('stringingOrder', {
         clientName, contactMethod, contactValue, racketDescription,
         stringId, tension, gripAddOn, requestedCompletionDate: requestedDate, paymentMethod,
+        creditId: credit?.found ? credit.creditId : undefined,
       });
       setResult(res);
     } catch (err) {
@@ -95,6 +105,12 @@ export default function Stringing() {
           <label>Email Address</label>
           <input type="email" value={contactValue} onChange={(e) => setContactValue(e.target.value)} placeholder="you@example.com" />
         </div>
+
+        {credit?.found && (
+          <div className="confirmation" style={{ margin: '4px 0' }}>
+            <p style={{ margin: 0 }}>🎾 Free labor reward found — it'll be applied to this order automatically.</p>
+          </div>
+        )}
 
         <div className="field">
           <label>Racket (brand / model) — optional</label>
