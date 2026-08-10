@@ -85,6 +85,7 @@ function Dashboard({ token }) {
       </header>
 
       <WalkInForm token={token} clinics={clinics} onAdded={refresh} />
+      <ManualPackForm token={token} clinics={clinics} onAdded={refresh} />
       <CancelClassForm token={token} clinics={clinics} onCancelled={refresh} />
 
       <div className="category-toggle" style={{ margin: '20px 20px 4px' }}>
@@ -322,6 +323,85 @@ function CancelClassForm({ token, clinics, onCancelled }) {
         </button>
         <button className="submit-btn" style={{ background: 'var(--line)', color: 'var(--charcoal)' }} onClick={() => setOpen(false)}>
           Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ManualPackForm({ token, clinics, onAdded }) {
+  const [open, setOpen] = useState(false);
+  const [clinicId, setClinicId] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [childName, setChildName] = useState('');
+  const [contactValue, setContactValue] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('other');
+  const [submitting, setSubmitting] = useState(false);
+
+  const selectedClinic = clinics.find((c) => c.clinicId === clinicId);
+  const isJunior = selectedClinic?.category === 'Junior';
+
+  async function submit() {
+    setSubmitting(true);
+    await apiPost('adminAddPack', { token, clinicId, clientName, childName, contactValue, paymentMethod });
+    setSubmitting(false);
+    setClientName('');
+    setChildName('');
+    setContactValue('');
+    setClinicId('');
+    onAdded();
+    setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <div style={{ padding: '8px 20px 0' }}>
+        <button className="submit-btn" onClick={() => setOpen(true)}>+ Record Pack Purchase</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="booking-form" style={{ paddingTop: 16 }}>
+      <div className="field">
+        <label>Clinic</label>
+        <select value={clinicId} onChange={(e) => setClinicId(e.target.value)}>
+          <option value="">Choose a clinic</option>
+          {clinics.map((c) => (
+            <option key={c.clinicId} value={c.clinicId}>{c.name} — {c.packSize}-pack, ${c.packPrice}</option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label>{isJunior ? 'Parent / Guardian Name' : 'Client Name'}</label>
+        <input value={clientName} onChange={(e) => setClientName(e.target.value)} />
+      </div>
+      {isJunior && (
+        <div className="field">
+          <label>Child's Name</label>
+          <input value={childName} onChange={(e) => setChildName(e.target.value)} />
+        </div>
+      )}
+      <div className="field">
+        <label>Email (optional — enables confirmation email + group add)</label>
+        <input type="email" value={contactValue} onChange={(e) => setContactValue(e.target.value)} placeholder="you@example.com" />
+      </div>
+      <div className="field">
+        <label>Payment Method</label>
+        <div className="option-row">
+          {['venmo', 'zelle', 'other'].map((m) => (
+            <div key={m} className={`option-pill ${paymentMethod === m ? 'active' : ''}`} onClick={() => setPaymentMethod(m)}>
+              {m[0].toUpperCase() + m.slice(1)}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="option-row">
+        <button className="submit-btn" disabled={!clinicId || !clientName || submitting} onClick={submit}>
+          {submitting ? 'Recording…' : 'Record Purchase'}
+        </button>
+        <button className="submit-btn" style={{ background: 'var(--line)', color: 'var(--charcoal)' }} onClick={() => setOpen(false)}>
+          Cancel
         </button>
       </div>
     </div>
