@@ -139,6 +139,8 @@ function BookingForm({ clinic, grips }) {
   const usingExistingPack = mode === 'pack' && packLookup?.found === true;
 
   const isJunior = clinic.category === 'Junior';
+  const selectedSlot = slots.find((s) => s.date === selectedDate);
+  const isFullSelected = mode === 'single' && !!selectedSlot && selectedSlot.spotsLeft <= 0;
 
   const validEmail = EMAIL_PATTERN.test(contactValue);
 
@@ -224,8 +226,8 @@ function BookingForm({ clinic, grips }) {
             <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)}>
               <option value="">Choose a date</option>
               {slots.map((s) => (
-                <option key={s.date} value={s.date} disabled={s.spotsLeft <= 0}>
-                  {s.date} — {s.spotsLeft > 0 ? `${s.spotsLeft} spots left` : 'Full'}
+                <option key={s.date} value={s.date}>
+                  {s.date} — {s.spotsLeft > 0 ? `${s.spotsLeft} spots left` : 'Full — join waitlist'}
                 </option>
               ))}
             </select>
@@ -233,7 +235,11 @@ function BookingForm({ clinic, grips }) {
         </div>
       )}
 
-      {mode === 'single' && grips.length > 0 && (
+      {mode === 'single' && isFullSelected && (
+        <WaitlistForm clinic={clinic} date={selectedDate} />
+      )}
+
+      {mode === 'single' && !isFullSelected && grips.length > 0 && (
         <div className="field">
           <label>Add a grip? (optional)</label>
           <select value={gripAddOn} onChange={(e) => setGripAddOn(e.target.value)}>
@@ -245,7 +251,7 @@ function BookingForm({ clinic, grips }) {
         </div>
       )}
 
-      {mode === 'single' && (
+      {mode === 'single' && !isFullSelected && (
         <>
           <div className="field">
             <label>{isJunior ? "Parent / Guardian Name" : "Your Name"}</label>
@@ -365,11 +371,53 @@ function BookingForm({ clinic, grips }) {
 
       {result?.type === 'error' && <div className="empty-state" style={{ color: 'var(--error)' }}>{result.message}</div>}
 
-      {(mode === 'single' || usingExistingPack || buyingNewPack) && (
+      {((mode === 'single' && !isFullSelected) || usingExistingPack || buyingNewPack) && (
         <button className="submit-btn" disabled={!canSubmit || submitting} onClick={handleSubmit}>
           {submitting ? 'Booking…' : usingExistingPack ? 'Book Session' : buyingNewPack ? 'Buy Pack' : 'Confirm Booking'}
         </button>
       )}
+    </div>
+  );
+}
+
+function WaitlistForm({ clinic, date }) {
+  const [clientName, setClientName] = useState('');
+  const [contactValue, setContactValue] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [joined, setJoined] = useState(false);
+
+  async function submit() {
+    setSubmitting(true);
+    await apiPost('joinWaitlist', { clinicId: clinic.clinicId, date, clientName, contactValue });
+    setSubmitting(false);
+    setJoined(true);
+  }
+
+  if (joined) {
+    return (
+      <div className="confirmation">
+        <h3>You're on the list</h3>
+        <p>We'll email you the moment a spot opens up for {date}.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="booking-form" style={{ paddingTop: 0 }}>
+      <div className="empty-state" style={{ padding: '8px 0' }}>
+        That date is full — join the waitlist and we'll email you if a spot opens.
+      </div>
+      <div className="field">
+        <label>Your Name</label>
+        <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Full name" />
+      </div>
+      <div className="field">
+        <label>Email Address</label>
+        <input type="email" value={contactValue} onChange={(e) => setContactValue(e.target.value)} placeholder="you@example.com" />
+      </div>
+      <button className="submit-btn" disabled={!clientName || !EMAIL_PATTERN.test(contactValue) || submitting} onClick={submit}>
+        {submitting ? 'Joining…' : 'Join Waitlist'}
+      </button>
     </div>
   );
 }
