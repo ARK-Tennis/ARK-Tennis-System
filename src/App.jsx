@@ -102,6 +102,7 @@ function BookingForm({ clinic, grips }) {
   const [result, setResult] = useState(null);
   const [packLookup, setPackLookup] = useState(null); // null = not checked, {found:false} or {found:true,...}
   const [checkingPack, setCheckingPack] = useState(false);
+  const [packSettings, setPackSettings] = useState(null); // { packSize, packPrice, packExpiryDays } for this clinic's category
 
   useEffect(() => {
     setSelectedDate('');
@@ -115,6 +116,10 @@ function BookingForm({ clinic, grips }) {
       });
     }
   }, [mode, clinic]);
+
+  useEffect(() => {
+    apiGet('packSettings', { category: clinic.category }).then(setPackSettings);
+  }, [clinic]);
 
   // Once we know we're using an existing pack, we still need open slots to pick a date from.
   useEffect(() => {
@@ -130,7 +135,7 @@ function BookingForm({ clinic, grips }) {
   async function checkForExistingPack() {
     if (!contactValue) return;
     setCheckingPack(true);
-    const res = await apiGet('myPack', { clinicId: clinic.clinicId, contactValue });
+    const res = await apiGet('myPack', { category: clinic.category, contactValue });
     setPackLookup(res);
     setCheckingPack(false);
   }
@@ -170,7 +175,7 @@ function BookingForm({ clinic, grips }) {
         setResult({ type: 'single', ...res });
       } else if (buyingNewPack) {
         const res = await apiPost('buyPack', {
-          clinicId: clinic.clinicId,
+          category: clinic.category,
           clientName,
           childName,
           contactMethod,
@@ -212,8 +217,8 @@ function BookingForm({ clinic, grips }) {
             <span className="sub">${clinic.sessionPrice}</span>
           </div>
           <div className={`option-pill ${mode === 'pack' ? 'active' : ''}`} onClick={() => setMode('pack')}>
-            {clinic.packSize}-Session Pack
-            <span className="sub">${clinic.packPrice}</span>
+            {packSettings ? `${packSettings.packSize}-Session Pack` : 'Session Pack'}
+            {packSettings && <span className="sub">${packSettings.packPrice} · any {clinic.category.toLowerCase()} clinic</span>}
           </div>
         </div>
       </div>
@@ -350,7 +355,7 @@ function BookingForm({ clinic, grips }) {
       {buyingNewPack && (
         <>
           <div className="empty-state" style={{ padding: '8px 0' }}>
-            No active pack found for that contact — buy a new {clinic.packSize}-session pack below.
+            No active pack found for that contact — buy a new {packSettings ? packSettings.packSize : ''}-session pack below (usable at any {clinic.category.toLowerCase()} clinic).
           </div>
           <div className="field">
             <label>Payment Method</label>

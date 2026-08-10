@@ -85,7 +85,7 @@ function Dashboard({ token }) {
       </header>
 
       <WalkInForm token={token} clinics={clinics} onAdded={refresh} />
-      <ManualPackForm token={token} clinics={clinics} onAdded={refresh} />
+      <ManualPackForm token={token} onAdded={refresh} />
       <CancelClassForm token={token} clinics={clinics} onCancelled={refresh} />
 
       <div className="category-toggle" style={{ margin: '20px 20px 4px' }}>
@@ -117,7 +117,7 @@ function labelFor(t) {
 
 const SHEET_META = {
   signups: { idCol: 'SignupID', columns: ['ClientName', 'ChildName', 'ClinicID', 'SessionDate', 'PlanType', 'PaymentMethod', 'PaymentStatus', 'Source'] },
-  packs: { idCol: 'PackId', columns: ['ClientName', 'ChildName', 'ClinicId', 'SessionsRemaining', 'ExpiryDate', 'PricePaid', 'PaymentMethod', 'PaymentStatus'] },
+  packs: { idCol: 'PackId', columns: ['ClientName', 'ChildName', 'Category', 'SessionsRemaining', 'ExpiryDate', 'PricePaid', 'PaymentMethod', 'PaymentStatus'] },
   stringingOrders: { idCol: 'OrderID', columns: ['ClientName', 'RacketDescription', 'StringID', 'Tension', 'RequestedCompletionDate', 'PaymentMethod', 'PaymentStatus', 'Status'] },
   makeupCredits: { idCol: 'CreditID', columns: ['ClientName', 'OriginClinicID', 'OriginDate', 'Status', 'ExpiryDate'] },
 };
@@ -168,8 +168,69 @@ function tabToSheetName(tab) {
   return { signups: 'Signups', packs: 'Packs', stringingOrders: 'StringingOrders', makeupCredits: 'MakeupCredits' }[tab];
 }
 
+function PackSettingsEditor({ token }) {
+  const [settings, setSettings] = useState({ Junior: null, Adult: null });
+  const [edits, setEdits] = useState({ Junior: {}, Adult: {} });
+  const [saving, setSaving] = useState(null);
+
+  useEffect(() => {
+    apiGet('packSettings', { category: 'Junior' }).then((s) => setSettings((prev) => ({ ...prev, Junior: s })));
+    apiGet('packSettings', { category: 'Adult' }).then((s) => setSettings((prev) => ({ ...prev, Adult: s })));
+  }, []);
+
+  function setField(category, field, value) {
+    setEdits((prev) => ({ ...prev, [category]: { ...prev[category], [field]: value } }));
+  }
+
+  async function save(category) {
+    setSaving(category);
+    await apiPost('updatePackSettings', { token, category, ...edits[category] });
+    setSaving(null);
+    setEdits((prev) => ({ ...prev, [category]: {} }));
+    apiGet('packSettings', { category }).then((s) => setSettings((prev) => ({ ...prev, [category]: s })));
+  }
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, margin: '0 0 10px' }}>Pack Settings (category-wide)</h3>
+      {['Junior', 'Adult'].map((category) => {
+        const s = settings[category];
+        const edit = edits[category] || {};
+        if (!s) return <div key={category} className="loading-state">Loading {category}…</div>;
+        return (
+          <div key={category} className="clinic-card" style={{ cursor: 'default', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+            <div className="info" style={{ flex: '1 1 140px' }}>
+              <h3>{category}</h3>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Sessions</label>
+                <input type="number" style={{ width: 70, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                  value={edit.packSize ?? s.packSize} onChange={(e) => setField(category, 'packSize', e.target.value)} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Price</label>
+                <input type="number" style={{ width: 90, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                  value={edit.packPrice ?? s.packPrice} onChange={(e) => setField(category, 'packPrice', e.target.value)} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Expiry (days)</label>
+                <input type="number" style={{ width: 80, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                  value={edit.packExpiryDays ?? s.packExpiryDays} onChange={(e) => setField(category, 'packExpiryDays', e.target.value)} />
+              </div>
+              <button className="option-pill" style={{ padding: '10px 14px' }} disabled={!edits[category] || Object.keys(edits[category]).length === 0 || saving === category} onClick={() => save(category)}>
+                {saving === category ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ClinicsEditor({ token, clinics, onSaved }) {
-  const [edits, setEdits] = useState({}); // clinicId -> { sessionPrice, packPrice }
+  const [edits, setEdits] = useState({}); // clinicId -> { sessionPrice }
   const [savingId, setSavingId] = useState(null);
 
   function setField(clinicId, field, value) {
@@ -184,11 +245,12 @@ function ClinicsEditor({ token, clinics, onSaved }) {
     onSaved();
   }
 
-  if (!clinics || clinics.length === 0) return <div className="empty-state">No clinics found.</div>;
-
   return (
     <div style={{ padding: '16px 20px 40px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {clinics.map((c) => {
+      <PackSettingsEditor token={token} />
+
+      {(!clinics || clinics.length === 0) && <div className="empty-state">No clinics found.</div>}
+      {clinics && clinics.map((c) => {
         const edit = edits[c.clinicId] || {};
         return (
           <div key={c.clinicId} className="clinic-card" style={{ cursor: 'default', flexWrap: 'wrap', gap: 12 }}>
@@ -205,15 +267,6 @@ function ClinicsEditor({ token, clinics, onSaved }) {
                   style={{ width: 90, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
                   value={edit.sessionPrice ?? c.sessionPrice}
                   onChange={(e) => setField(c.clinicId, 'sessionPrice', e.target.value)}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Pack Price</label>
-                <input
-                  type="number"
-                  style={{ width: 90, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
-                  value={edit.packPrice ?? c.packPrice}
-                  onChange={(e) => setField(c.clinicId, 'packPrice', e.target.value)}
                 />
               </div>
               <button
@@ -329,26 +382,34 @@ function CancelClassForm({ token, clinics, onCancelled }) {
   );
 }
 
-function ManualPackForm({ token, clinics, onAdded }) {
+function ManualPackForm({ token, onAdded }) {
   const [open, setOpen] = useState(false);
-  const [clinicId, setClinicId] = useState('');
+  const [category, setCategory] = useState('');
   const [clientName, setClientName] = useState('');
   const [childName, setChildName] = useState('');
   const [contactValue, setContactValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('other');
   const [submitting, setSubmitting] = useState(false);
+  const [packSettings, setPackSettings] = useState(null);
 
-  const selectedClinic = clinics.find((c) => c.clinicId === clinicId);
-  const isJunior = selectedClinic?.category === 'Junior';
+  useEffect(() => {
+    if (category) {
+      apiGet('packSettings', { category }).then(setPackSettings);
+    } else {
+      setPackSettings(null);
+    }
+  }, [category]);
+
+  const isJunior = category === 'Junior';
 
   async function submit() {
     setSubmitting(true);
-    await apiPost('adminAddPack', { token, clinicId, clientName, childName, contactValue, paymentMethod });
+    await apiPost('adminAddPack', { token, category, clientName, childName, contactValue, paymentMethod });
     setSubmitting(false);
     setClientName('');
     setChildName('');
     setContactValue('');
-    setClinicId('');
+    setCategory('');
     onAdded();
     setOpen(false);
   }
@@ -364,13 +425,17 @@ function ManualPackForm({ token, clinics, onAdded }) {
   return (
     <div className="booking-form" style={{ paddingTop: 16 }}>
       <div className="field">
-        <label>Clinic</label>
-        <select value={clinicId} onChange={(e) => setClinicId(e.target.value)}>
-          <option value="">Choose a clinic</option>
-          {clinics.map((c) => (
-            <option key={c.clinicId} value={c.clinicId}>{c.name} — {c.packSize}-pack, ${c.packPrice}</option>
-          ))}
+        <label>Category</label>
+        <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <option value="">Choose a category</option>
+          <option value="Junior">Junior</option>
+          <option value="Adult">Adult</option>
         </select>
+        {packSettings && (
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
+            {packSettings.packSize}-session pack, ${packSettings.packPrice}, valid {packSettings.packExpiryDays} days — usable at any {category.toLowerCase()} clinic
+          </div>
+        )}
       </div>
       <div className="field">
         <label>{isJunior ? 'Parent / Guardian Name' : 'Client Name'}</label>
@@ -397,7 +462,7 @@ function ManualPackForm({ token, clinics, onAdded }) {
         </div>
       </div>
       <div className="option-row">
-        <button className="submit-btn" disabled={!clinicId || !clientName || submitting} onClick={submit}>
+        <button className="submit-btn" disabled={!category || !clientName || submitting} onClick={submit}>
           {submitting ? 'Recording…' : 'Record Purchase'}
         </button>
         <button className="submit-btn" style={{ background: 'var(--line)', color: 'var(--charcoal)' }} onClick={() => setOpen(false)}>
