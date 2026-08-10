@@ -118,7 +118,7 @@ function BookingForm({ clinic, grips }) {
   }, [mode, clinic]);
 
   useEffect(() => {
-    apiGet('packSettings', { category: clinic.category }).then(setPackSettings);
+    apiGet('packSettings', { packGroup: clinic.packGroup }).then(setPackSettings);
   }, [clinic]);
 
   // Once we know we're using an existing pack, we still need open slots to pick a date from.
@@ -135,7 +135,7 @@ function BookingForm({ clinic, grips }) {
   async function checkForExistingPack() {
     if (!contactValue) return;
     setCheckingPack(true);
-    const res = await apiGet('myPack', { category: clinic.category, contactValue });
+    const res = await apiGet('myPack', { packGroup: clinic.packGroup, contactValue });
     setPackLookup(res);
     setCheckingPack(false);
   }
@@ -175,7 +175,7 @@ function BookingForm({ clinic, grips }) {
         setResult({ type: 'single', ...res });
       } else if (buyingNewPack) {
         const res = await apiPost('buyPack', {
-          category: clinic.category,
+          packGroup: clinic.packGroup,
           clientName,
           childName,
           contactMethod,
@@ -218,7 +218,7 @@ function BookingForm({ clinic, grips }) {
           </div>
           <div className={`option-pill ${mode === 'pack' ? 'active' : ''}`} onClick={() => setMode('pack')}>
             {packSettings ? `${packSettings.packSize}-Session Pack` : 'Session Pack'}
-            {packSettings && <span className="sub">${packSettings.packPrice} · any {clinic.category.toLowerCase()} clinic</span>}
+            {packSettings && <span className="sub">${packSettings.packPrice} · usable at ${clinic.sessionPrice} {clinic.category.toLowerCase()} clinics</span>}
           </div>
         </div>
       </div>
@@ -355,7 +355,7 @@ function BookingForm({ clinic, grips }) {
       {buyingNewPack && (
         <>
           <div className="empty-state" style={{ padding: '8px 0' }}>
-            No active pack found for that contact — buy a new {packSettings ? packSettings.packSize : ''}-session pack below (usable at any {clinic.category.toLowerCase()} clinic).
+            No active pack found for that contact — buy a new {packSettings ? packSettings.packSize : ''}-session pack below (usable at ${clinic.sessionPrice} {clinic.category.toLowerCase()} clinics).
           </div>
           <div className="field">
             <label>Payment Method</label>

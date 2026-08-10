@@ -85,7 +85,7 @@ function Dashboard({ token }) {
       </header>
 
       <WalkInForm token={token} clinics={clinics} onAdded={refresh} />
-      <ManualPackForm token={token} onAdded={refresh} />
+      <ManualPackForm token={token} clinics={adminClinics} onAdded={refresh} />
       <CancelClassForm token={token} clinics={clinics} onCancelled={refresh} />
 
       <div className="category-toggle" style={{ margin: '20px 20px 4px' }}>
@@ -117,7 +117,7 @@ function labelFor(t) {
 
 const SHEET_META = {
   signups: { idCol: 'SignupID', columns: ['ClientName', 'ChildName', 'ClinicID', 'SessionDate', 'PlanType', 'PaymentMethod', 'PaymentStatus', 'Source'] },
-  packs: { idCol: 'PackId', columns: ['ClientName', 'ChildName', 'Category', 'SessionsRemaining', 'ExpiryDate', 'PricePaid', 'PaymentMethod', 'PaymentStatus'] },
+  packs: { idCol: 'PackId', columns: ['ClientName', 'ChildName', 'PackGroup', 'SessionsRemaining', 'ExpiryDate', 'PricePaid', 'PaymentMethod', 'PaymentStatus'] },
   stringingOrders: { idCol: 'OrderID', columns: ['ClientName', 'RacketDescription', 'StringID', 'Tension', 'RequestedCompletionDate', 'PaymentMethod', 'PaymentStatus', 'Status'] },
   makeupCredits: { idCol: 'CreditID', columns: ['ClientName', 'OriginClinicID', 'OriginDate', 'Status', 'ExpiryDate'] },
 };
@@ -168,58 +168,71 @@ function tabToSheetName(tab) {
   return { signups: 'Signups', packs: 'Packs', stringingOrders: 'StringingOrders', makeupCredits: 'MakeupCredits' }[tab];
 }
 
-function PackSettingsEditor({ token }) {
-  const [settings, setSettings] = useState({ Junior: null, Adult: null });
-  const [edits, setEdits] = useState({ Junior: {}, Adult: {} });
+function PackSettingsEditor({ token, clinics }) {
+  const [settings, setSettings] = useState({}); // packGroup -> settings or null (not yet configured)
+  const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState(null);
 
+  // Distinct packGroups actually in use, e.g. "Junior-25", "Junior-30", "Junior-35", "Adult-40"
+  const packGroups = [...new Set((clinics || []).map((c) => c.packGroup))].sort();
+
   useEffect(() => {
-    apiGet('packSettings', { category: 'Junior' }).then((s) => setSettings((prev) => ({ ...prev, Junior: s })));
-    apiGet('packSettings', { category: 'Adult' }).then((s) => setSettings((prev) => ({ ...prev, Adult: s })));
-  }, []);
+    packGroups.forEach((pg) => {
+      if (!(pg in settings)) {
+        apiGet('packSettings', { packGroup: pg }).then((s) => setSettings((prev) => ({ ...prev, [pg]: s })));
+      }
+    });
+  }, [clinics]); // eslint-disable-line
 
-  function setField(category, field, value) {
-    setEdits((prev) => ({ ...prev, [category]: { ...prev[category], [field]: value } }));
+  function setField(packGroup, field, value) {
+    setEdits((prev) => ({ ...prev, [packGroup]: { ...prev[packGroup], [field]: value } }));
   }
 
-  async function save(category) {
-    setSaving(category);
-    await apiPost('updatePackSettings', { token, category, ...edits[category] });
+  async function save(packGroup) {
+    setSaving(packGroup);
+    const s = settings[packGroup] || {};
+    const merged = { ...s, ...edits[packGroup] };
+    await apiPost('updatePackSettings', { token, packGroup, ...merged });
     setSaving(null);
-    setEdits((prev) => ({ ...prev, [category]: {} }));
-    apiGet('packSettings', { category }).then((s) => setSettings((prev) => ({ ...prev, [category]: s })));
+    setEdits((prev) => ({ ...prev, [packGroup]: {} }));
+    apiGet('packSettings', { packGroup }).then((res) => setSettings((prev) => ({ ...prev, [packGroup]: res })));
   }
+
+  if (packGroups.length === 0) return null;
 
   return (
     <div style={{ marginBottom: 8 }}>
-      <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, margin: '0 0 10px' }}>Pack Settings (category-wide)</h3>
-      {['Junior', 'Adult'].map((category) => {
-        const s = settings[category];
-        const edit = edits[category] || {};
-        if (!s) return <div key={category} className="loading-state">Loading {category}…</div>;
+      <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, margin: '0 0 10px' }}>Pack Settings (by price tier)</h3>
+      {packGroups.map((packGroup) => {
+        const s = settings[packGroup];
+        const edit = edits[packGroup] || {};
+        const [category, price] = packGroup.split('-');
+        const needsSetup = s === null;
+        if (s === undefined) return <div key={packGroup} className="loading-state">Loading {packGroup}…</div>;
         return (
-          <div key={category} className="clinic-card" style={{ cursor: 'default', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
-            <div className="info" style={{ flex: '1 1 140px' }}>
-              <h3>{category}</h3>
+          <div key={packGroup} className="clinic-card" style={{ cursor: 'default', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+            <div className="info" style={{ flex: '1 1 160px' }}>
+              <h3>{category} — ${price}/session</h3>
+              {needsSetup && <span className="time" style={{ color: 'var(--error)' }}>Not configured yet</span>}
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div>
                 <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Sessions</label>
                 <input type="number" style={{ width: 70, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
-                  value={edit.packSize ?? s.packSize} onChange={(e) => setField(category, 'packSize', e.target.value)} />
+                  value={edit.packSize ?? s?.packSize ?? 8} onChange={(e) => setField(packGroup, 'packSize', e.target.value)} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Price</label>
                 <input type="number" style={{ width: 90, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
-                  value={edit.packPrice ?? s.packPrice} onChange={(e) => setField(category, 'packPrice', e.target.value)} />
+                  value={edit.packPrice ?? s?.packPrice ?? ''} onChange={(e) => setField(packGroup, 'packPrice', e.target.value)} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Expiry (days)</label>
                 <input type="number" style={{ width: 80, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
-                  value={edit.packExpiryDays ?? s.packExpiryDays} onChange={(e) => setField(category, 'packExpiryDays', e.target.value)} />
+                  value={edit.packExpiryDays ?? s?.packExpiryDays ?? 120} onChange={(e) => setField(packGroup, 'packExpiryDays', e.target.value)} />
               </div>
-              <button className="option-pill" style={{ padding: '10px 14px' }} disabled={!edits[category] || Object.keys(edits[category]).length === 0 || saving === category} onClick={() => save(category)}>
-                {saving === category ? 'Saving…' : 'Save'}
+              <button className="option-pill" style={{ padding: '10px 14px' }} disabled={saving === packGroup} onClick={() => save(packGroup)}>
+                {saving === packGroup ? 'Saving…' : needsSetup ? 'Create' : 'Save'}
               </button>
             </div>
           </div>
@@ -247,7 +260,7 @@ function ClinicsEditor({ token, clinics, onSaved }) {
 
   return (
     <div style={{ padding: '16px 20px 40px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <PackSettingsEditor token={token} />
+      <PackSettingsEditor token={token} clinics={clinics} />
 
       {(!clinics || clinics.length === 0) && <div className="empty-state">No clinics found.</div>}
       {clinics && clinics.map((c) => {
@@ -382,9 +395,9 @@ function CancelClassForm({ token, clinics, onCancelled }) {
   );
 }
 
-function ManualPackForm({ token, onAdded }) {
+function ManualPackForm({ token, clinics, onAdded }) {
   const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState('');
+  const [packGroup, setPackGroup] = useState('');
   const [clientName, setClientName] = useState('');
   const [childName, setChildName] = useState('');
   const [contactValue, setContactValue] = useState('');
@@ -392,24 +405,26 @@ function ManualPackForm({ token, onAdded }) {
   const [submitting, setSubmitting] = useState(false);
   const [packSettings, setPackSettings] = useState(null);
 
+  const packGroups = [...new Set((clinics || []).map((c) => c.packGroup))].sort();
+  const category = packGroup.split('-')[0];
+  const isJunior = category === 'Junior';
+
   useEffect(() => {
-    if (category) {
-      apiGet('packSettings', { category }).then(setPackSettings);
+    if (packGroup) {
+      apiGet('packSettings', { packGroup }).then(setPackSettings);
     } else {
       setPackSettings(null);
     }
-  }, [category]);
-
-  const isJunior = category === 'Junior';
+  }, [packGroup]);
 
   async function submit() {
     setSubmitting(true);
-    await apiPost('adminAddPack', { token, category, clientName, childName, contactValue, paymentMethod });
+    await apiPost('adminAddPack', { token, packGroup, clientName, childName, contactValue, paymentMethod });
     setSubmitting(false);
     setClientName('');
     setChildName('');
     setContactValue('');
-    setCategory('');
+    setPackGroup('');
     onAdded();
     setOpen(false);
   }
@@ -425,15 +440,22 @@ function ManualPackForm({ token, onAdded }) {
   return (
     <div className="booking-form" style={{ paddingTop: 16 }}>
       <div className="field">
-        <label>Category</label>
-        <select value={category} onChange={(e) => setCategory(e.target.value)}>
-          <option value="">Choose a category</option>
-          <option value="Junior">Junior</option>
-          <option value="Adult">Adult</option>
+        <label>Pack (by price tier)</label>
+        <select value={packGroup} onChange={(e) => setPackGroup(e.target.value)}>
+          <option value="">Choose a pack</option>
+          {packGroups.map((pg) => {
+            const [cat, price] = pg.split('-');
+            return <option key={pg} value={pg}>{cat} — ${price}/session</option>;
+          })}
         </select>
-        {packSettings && (
+        {packGroup && packSettings && (
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
-            {packSettings.packSize}-session pack, ${packSettings.packPrice}, valid {packSettings.packExpiryDays} days — usable at any {category.toLowerCase()} clinic
+            {packSettings.packSize}-session pack, ${packSettings.packPrice}, valid {packSettings.packExpiryDays} days
+          </div>
+        )}
+        {packGroup && packSettings === null && (
+          <div style={{ fontSize: 12, color: 'var(--error)', marginTop: 6 }}>
+            This pack tier isn't configured yet — set it up in the Clinics tab's Pack Settings first.
           </div>
         )}
       </div>
@@ -462,7 +484,7 @@ function ManualPackForm({ token, onAdded }) {
         </div>
       </div>
       <div className="option-row">
-        <button className="submit-btn" disabled={!category || !clientName || submitting} onClick={submit}>
+        <button className="submit-btn" disabled={!packGroup || !clientName || submitting} onClick={submit}>
           {submitting ? 'Recording…' : 'Record Purchase'}
         </button>
         <button className="submit-btn" style={{ background: 'var(--line)', color: 'var(--charcoal)' }} onClick={() => setOpen(false)}>
