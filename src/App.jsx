@@ -223,6 +223,17 @@ function BookingForm({ clinic, grips }) {
   const [packLookup, setPackLookup] = useState(null); // null = not checked, {found:false} or {found:true,...}
   const [checkingPack, setCheckingPack] = useState(false);
   const [packSettings, setPackSettings] = useState(null); // { packSize, packPrice, packExpiryDays } for this clinic's category
+  const [availablePack, setAvailablePack] = useState(null); // silently-detected pack usable during single-session checkout
+
+  useEffect(() => {
+    if (mode === 'single' && EMAIL_PATTERN.test(contactValue)) {
+      apiGet('myPack', { packGroup: clinic.packGroup, contactValue }).then((res) => {
+        setAvailablePack(res?.found ? res : null);
+      });
+    } else {
+      setAvailablePack(null);
+    }
+  }, [mode, contactValue, clinic]);
 
   useEffect(() => {
     setSelectedDate('');
@@ -318,6 +329,18 @@ function BookingForm({ clinic, grips }) {
           paymentMethod,
         });
         setResult({ type: 'pack', ...res });
+      } else if (paymentMethod === 'pack' && availablePack) {
+        const res = await apiPost('signup', {
+          clinicId: clinic.clinicId,
+          clientName,
+          childName,
+          contactMethod,
+          contactValue,
+          planType: 'pack',
+          packId: availablePack.packId,
+          sessionDate: selectedDate,
+        });
+        setResult({ type: 'single', ...res });
       } else {
         const res = await apiPost('signup', {
           clinicId: clinic.clinicId,
@@ -379,7 +402,7 @@ function BookingForm({ clinic, grips }) {
         <WaitlistForm clinic={clinic} date={selectedDate} />
       )}
 
-      {mode === 'single' && !isFullSelected && grips.length > 0 && (
+      {mode === 'single' && !isFullSelected && paymentMethod !== 'pack' && grips.length > 0 && (
         <div className="field">
           <label>Add a grip? (optional)</label>
           <select value={gripAddOn} onChange={(e) => setGripAddOn(e.target.value)}>
@@ -415,9 +438,26 @@ function BookingForm({ clinic, grips }) {
             />
           </div>
 
+          {availablePack && (
+            <div className="confirmation" style={{ margin: '4px 0' }}>
+              <p style={{ margin: 0 }}>
+                🎾 You have <strong>{availablePack.sessionsRemaining}</strong> pack session{availablePack.sessionsRemaining === 1 ? '' : 's'} available for this clinic —
+                use "Pack" below instead of paying again.
+              </p>
+            </div>
+          )}
+
           <div className="field">
             <label>Payment Method</label>
             <div className="option-row">
+              {availablePack && (
+                <div
+                  className={`option-pill ${paymentMethod === 'pack' ? 'active' : ''}`}
+                  onClick={() => setPaymentMethod('pack')}
+                >
+                  Use Pack
+                </div>
+              )}
               {PAYMENT_METHODS.map((m) => (
                 <div
                   key={m.id}
