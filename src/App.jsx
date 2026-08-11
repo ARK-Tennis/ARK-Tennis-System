@@ -643,20 +643,29 @@ function Confirmation({ result }) {
   }
 
   const link = result.paymentLink;
+  const isPackPurchase = result.type === 'pack';
+
   return (
     <div className="confirmation">
-      <h3>You're booked!</h3>
+      <h3>{isPackPurchase ? "Pack purchase received!" : "You're booked!"}</h3>
       {!link ? (
         <p>This session is covered by your pack — nothing more to pay.</p>
       ) : typeof link === 'string' ? (
         <>
           <p>Complete payment via Venmo to finish your booking.</p>
           <a className="pay-link" href={link} target="_blank" rel="noreferrer">Pay on Venmo</a>
+          {isPackPurchase && <p style={{ fontSize: 13, marginTop: 10 }}>Your pack will be ready to use once we've confirmed the payment — usually within 30 minutes.</p>}
         </>
       ) : link?.type === 'zelle-info' ? (
-        <p>Send <strong>${link.amount}</strong> via Zelle to <strong>{link.info}</strong>.</p>
+        <>
+          <p>Send <strong>${link.amount}</strong> via Zelle to <strong>{link.info}</strong>.</p>
+          {isPackPurchase && <p style={{ fontSize: 13, marginTop: 10 }}>Your pack will be ready to use once we've confirmed the payment — usually within 30 minutes.</p>}
+        </>
       ) : (
-        <p>We'll follow up about payment for <strong>${link?.amount}</strong> — cash, check, or another method, whatever works best.</p>
+        <>
+          <p>We'll follow up about payment for <strong>${link?.amount}</strong> — cash, check, or another method, whatever works best.</p>
+          {isPackPurchase && <p style={{ fontSize: 13, marginTop: 10 }}><strong>Since this isn't Venmo/Zelle, we'll need to manually confirm your payment before the pack is ready to use</strong> — we'll be in touch.</p>}
+        </>
       )}
       {result.statusLink && (
         <p style={{ fontSize: 13, marginTop: 12 }}>
