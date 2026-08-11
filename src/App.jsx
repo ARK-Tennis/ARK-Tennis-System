@@ -114,6 +114,13 @@ function PacksTab() {
 
   return (
     <>
+      <div className="booking-form" style={{ paddingBottom: 0 }}>
+        <p style={{ color: 'var(--muted)', fontSize: 14, margin: '0 0 4px' }}>
+          Each pack applies only to clinics priced at the rate shown — a pack bought for $27 clinics
+          works at any $27 clinic, but not at a $35 or $30 clinic. Pick the pack that matches the
+          clinic(s) you plan to attend.
+        </p>
+      </div>
       <div className="clinic-list">
         {loading && <div className="loading-state">Loading packs…</div>}
         {!loading && tiers.length === 0 && (
@@ -287,7 +294,9 @@ function BookingForm({ clinic, grips }) {
 
   const canSubmit =
     mode === 'single'
-      ? clientName && validEmail && paymentMethod && selectedDate && (!isJunior || childName)
+      ? clientName && validEmail && paymentMethod &&
+        (paymentMethod !== 'pack' || !!availablePack) &&
+        selectedDate && (!isJunior || childName)
       : usingExistingPack
       ? selectedDates.length > 0 && (!isJunior || childName)
       : buyingNewPack
@@ -438,26 +447,29 @@ function BookingForm({ clinic, grips }) {
             />
           </div>
 
-          {availablePack && (
+          {paymentMethod === 'pack' && (
             <div className="confirmation" style={{ margin: '4px 0' }}>
-              <p style={{ margin: 0 }}>
-                🎾 You have <strong>{availablePack.sessionsRemaining}</strong> pack session{availablePack.sessionsRemaining === 1 ? '' : 's'} available for this clinic —
-                use "Pack" below instead of paying again.
-              </p>
+              {!EMAIL_PATTERN.test(contactValue) ? (
+                <p style={{ margin: 0 }}>Enter your email above so we can check for an available pack.</p>
+              ) : availablePack ? (
+                <p style={{ margin: 0 }}>
+                  🎾 You have <strong>{availablePack.sessionsRemaining}</strong> pack session{availablePack.sessionsRemaining === 1 ? '' : 's'} available for this clinic.
+                </p>
+              ) : (
+                <p style={{ margin: 0, color: 'var(--error)' }}>No active pack found for this email at this clinic's price.</p>
+              )}
             </div>
           )}
 
           <div className="field">
             <label>Payment Method</label>
             <div className="option-row">
-              {availablePack && (
-                <div
-                  className={`option-pill ${paymentMethod === 'pack' ? 'active' : ''}`}
-                  onClick={() => setPaymentMethod('pack')}
-                >
-                  Use Pack
-                </div>
-              )}
+              <div
+                className={`option-pill ${paymentMethod === 'pack' ? 'active' : ''}`}
+                onClick={() => setPaymentMethod('pack')}
+              >
+                Use Pack
+              </div>
               {PAYMENT_METHODS.map((m) => (
                 <div
                   key={m.id}

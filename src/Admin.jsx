@@ -499,16 +499,38 @@ function WalkInForm({ token, clinics, onAdded }) {
   const [open, setOpen] = useState(false);
   const [clinicId, setClinicId] = useState('');
   const [clientName, setClientName] = useState('');
+  const [contactValue, setContactValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('other');
   const [sessionDate] = useState(new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
+  const [pack, setPack] = useState(null); // null = not checked, {found:false/true,...}
+  const [checkingPack, setCheckingPack] = useState(false);
+
+  const selectedClinic = clinics.find((c) => c.clinicId === clinicId);
+
+  async function checkPack() {
+    if (!selectedClinic || !contactValue) return;
+    setCheckingPack(true);
+    const res = await apiGet('myPack', { packGroup: selectedClinic.packGroup, contactValue });
+    setPack(res);
+    setCheckingPack(false);
+  }
 
   async function submit() {
     setSubmitting(true);
-    await apiPost('walkIn', { token, clinicId, clientName, sessionDate, paymentMethod });
+    const usingPack = paymentMethod === 'pack' && pack?.found;
+    await apiPost('walkIn', {
+      token, clinicId, clientName, sessionDate,
+      paymentMethod: usingPack ? undefined : paymentMethod,
+      contactValue,
+      packId: usingPack ? pack.packId : undefined,
+    });
     setSubmitting(false);
     setClientName('');
+    setContactValue('');
     setClinicId('');
+    setPack(null);
+    setPaymentMethod('other');
     onAdded();
     setOpen(false);
   }
@@ -521,11 +543,13 @@ function WalkInForm({ token, clinics, onAdded }) {
     );
   }
 
+  const canSubmit = clinicId && clientName && (paymentMethod !== 'pack' || pack?.found);
+
   return (
     <div className="booking-form" style={{ paddingTop: 16 }}>
       <div className="field">
         <label>Clinic</label>
-        <select value={clinicId} onChange={(e) => setClinicId(e.target.value)}>
+        <select value={clinicId} onChange={(e) => { setClinicId(e.target.value); setPack(null); }}>
           <option value="">Choose a clinic</option>
           {clinics.map((c) => (
             <option key={c.clinicId} value={c.clinicId}>{c.name}</option>
@@ -537,8 +561,27 @@ function WalkInForm({ token, clinics, onAdded }) {
         <input value={clientName} onChange={(e) => setClientName(e.target.value)} />
       </div>
       <div className="field">
+        <label>Email (optional — needed to check for a pack)</label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input style={{ flex: 1 }} type="email" value={contactValue} onChange={(e) => { setContactValue(e.target.value); setPack(null); }} placeholder="you@example.com" />
+          <button className="option-pill" style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} disabled={!clinicId || !contactValue || checkingPack} onClick={checkPack}>
+            {checkingPack ? 'Checking…' : 'Check Pack'}
+          </button>
+        </div>
+        {pack && (
+          <div style={{ fontSize: 12, marginTop: 6, color: pack.found ? 'var(--ink)' : 'var(--error)' }}>
+            {pack.found ? `Pack found — ${pack.sessionsRemaining} session(s) remaining.` : 'No active pack found for this email at this clinic\'s price.'}
+          </div>
+        )}
+      </div>
+      <div className="field">
         <label>Payment Method</label>
         <div className="option-row">
+          {pack?.found && (
+            <div className={`option-pill ${paymentMethod === 'pack' ? 'active' : ''}`} onClick={() => setPaymentMethod('pack')}>
+              Use Pack
+            </div>
+          )}
           {['venmo', 'zelle', 'other'].map((m) => (
             <div key={m} className={`option-pill ${paymentMethod === m ? 'active' : ''}`} onClick={() => setPaymentMethod(m)}>
               {m[0].toUpperCase() + m.slice(1)}
@@ -547,7 +590,7 @@ function WalkInForm({ token, clinics, onAdded }) {
         </div>
       </div>
       <div className="option-row">
-        <button className="submit-btn" disabled={!clinicId || !clientName || submitting} onClick={submit}>
+        <button className="submit-btn" disabled={!canSubmit || submitting} onClick={submit}>
           {submitting ? 'Adding…' : 'Add Walk-In'}
         </button>
         <button className="submit-btn" style={{ background: 'var(--line)', color: 'var(--charcoal)' }} onClick={() => setOpen(false)}>
