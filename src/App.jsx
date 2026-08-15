@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPost } from './api.js';
 
@@ -232,9 +232,13 @@ function BookingForm({ clinic, grips }) {
   const [packSettings, setPackSettings] = useState(null); // { packSize, packPrice, packExpiryDays } for this clinic's category
   const [availablePack, setAvailablePack] = useState(null); // silently-detected pack usable during single-session checkout
 
+  const availablePackRequestId = useRef(0);
+
   useEffect(() => {
+    const requestId = ++availablePackRequestId.current;
     if (mode === 'single' && EMAIL_PATTERN.test(contactValue)) {
       apiGet('myPack', { packGroup: clinic.packGroup, contactValue }).then((res) => {
+        if (requestId !== availablePackRequestId.current) return; // a newer request already superseded this one
         setAvailablePack(res?.found ? res : null);
       });
     } else {
@@ -385,7 +389,7 @@ function BookingForm({ clinic, grips }) {
           </div>
           <div className={`option-pill ${mode === 'pack' ? 'active' : ''}`} onClick={() => setMode('pack')}>
             {packSettings ? `${packSettings.packSize}-Session Pack` : 'Session Pack'}
-            {packSettings && <span className="sub">${packSettings.packPrice} · usable at ${clinic.sessionPrice} {clinic.category.toLowerCase()} clinics</span>}
+            {packSettings && <span className="sub">${packSettings.packPrice} · usable at ${clinic.packGroup.split('-')[1]} {clinic.category.toLowerCase()} clinics</span>}
           </div>
         </div>
       </div>
@@ -560,7 +564,7 @@ function BookingForm({ clinic, grips }) {
       {buyingNewPack && (
         <>
           <div className="empty-state" style={{ padding: '8px 0' }}>
-            No active pack found for that contact — buy a new {packSettings ? packSettings.packSize : ''}-session pack below (usable at ${clinic.sessionPrice} {clinic.category.toLowerCase()} clinics).
+            No active pack found for that contact — buy a new {packSettings ? packSettings.packSize : ''}-session pack below (usable at ${clinic.packGroup.split('-')[1]} {clinic.category.toLowerCase()} clinics).
           </div>
           <div className="field">
             <label>Payment Method</label>
