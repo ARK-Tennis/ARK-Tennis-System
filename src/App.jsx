@@ -637,6 +637,16 @@ function WaitlistForm({ clinic, date }) {
 }
 
 function Confirmation({ result }) {
+  const link = result.paymentLink;
+
+  useEffect(() => {
+    if (typeof link === 'string') {
+      // New tab, not full navigation — keeps this confirmation page (and the status link) visible.
+      // Falls back to the visible "Pay on Venmo" button below if the browser blocks the auto-open.
+      window.open(link, '_blank');
+    }
+  }, [link]);
+
   if (result.type === 'multi') {
     return (
       <div className="confirmation">
