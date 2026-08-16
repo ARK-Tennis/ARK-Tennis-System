@@ -388,7 +388,7 @@ function BookingForm({ clinic, grips }) {
             <span className="sub">${clinic.sessionPrice}</span>
           </div>
           <div className={`option-pill ${mode === 'pack' ? 'active' : ''}`} onClick={() => setMode('pack')}>
-            {packSettings ? `${packSettings.packSize}-Session Pack` : 'Session Pack'}
+            {packSettings ? `Purchase or Use ${packSettings.packSize}-Pack Session` : 'Purchase or Use Pack Session'}
             {packSettings && <span className="sub">${packSettings.packPrice} · usable at ${clinic.packGroup.split('-')[1]} {clinic.category.toLowerCase()} clinics</span>}
           </div>
         </div>
