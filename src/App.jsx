@@ -668,7 +668,6 @@ function Confirmation({ result }) {
     );
   }
 
-  const link = result.paymentLink;
   const isPackPurchase = result.type === 'pack';
 
   return (
