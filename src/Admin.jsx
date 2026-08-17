@@ -89,7 +89,7 @@ function Dashboard({ token }) {
       <CancelClassForm token={token} clinics={clinics} onCancelled={refresh} />
 
       <div className="category-toggle" style={{ margin: '20px 20px 4px' }}>
-        {['signups', 'packs', 'stringingOrders', 'makeupCredits', 'clinics'].map((t) => (
+        {['roster', 'signups', 'packs', 'stringingOrders', 'makeupCredits', 'clinics'].map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
             {labelFor(t)}
           </button>
@@ -98,6 +98,8 @@ function Dashboard({ token }) {
 
       {tab === 'clinics' ? (
         <ClinicsEditor token={token} clinics={adminClinics} onSaved={refresh} />
+      ) : tab === 'roster' ? (
+        <RosterTab token={token} clinics={adminClinics} onMarkPaid={markPaid} />
       ) : (
         <div style={{ padding: '16px 20px 40px', overflowX: 'auto' }}>
           <DataTable
@@ -112,7 +114,7 @@ function Dashboard({ token }) {
 }
 
 function labelFor(t) {
-  return { signups: 'Bookings', packs: 'Packs', stringingOrders: 'Stringing', makeupCredits: 'Makeup Credits', clinics: 'Clinics' }[t];
+  return { roster: 'Roster', signups: 'Bookings', packs: 'Packs', stringingOrders: 'Stringing', makeupCredits: 'Makeup Credits', clinics: 'Clinics' }[t];
 }
 
 const SHEET_META = {
@@ -166,6 +168,122 @@ function DataTable({ rows, tab, onMarkPaid }) {
 
 function tabToSheetName(tab) {
   return { signups: 'Signups', packs: 'Packs', stringingOrders: 'StringingOrders', makeupCredits: 'MakeupCredits' }[tab];
+}
+
+function RosterTab({ token, clinics, onMarkPaid }) {
+  const [selectedClinic, setSelectedClinic] = useState(null);
+  const [dates, setDates] = useState([]);
+  const [loadingDates, setLoadingDates] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [roster, setRoster] = useState([]);
+  const [loadingRoster, setLoadingRoster] = useState(false);
+
+  function pickClinic(c) {
+    setSelectedClinic(c);
+    setSelectedDate(null);
+    setRoster([]);
+    setLoadingDates(true);
+    apiGet('adminRosterDates', { token, clinicId: c.clinicId }).then((d) => {
+      setDates(Array.isArray(d) ? d : []);
+      setLoadingDates(false);
+    });
+  }
+
+  function pickDate(date) {
+    setSelectedDate(date);
+    setLoadingRoster(true);
+    apiGet('adminRoster', { token, clinicId: selectedClinic.clinicId, date }).then((r) => {
+      setRoster(Array.isArray(r) ? r : []);
+      setLoadingRoster(false);
+    });
+  }
+
+  async function markPaidAndRefresh(signupId) {
+    await onMarkPaid('Signups', signupId, 'SignupID');
+    pickDate(selectedDate);
+  }
+
+  // Step 1: pick a clinic
+  if (!selectedClinic) {
+    return (
+      <div className="clinic-list" style={{ paddingBottom: 24 }}>
+        {(!clinics || clinics.length === 0) && <div className="empty-state">No clinics found.</div>}
+        {clinics && clinics.map((c) => (
+          <div key={c.clinicId} className="clinic-card" onClick={() => pickClinic(c)}>
+            <div className="info">
+              <span className="clinic-day">{c.dayOfWeek}</span>
+              <h3>{c.name}</h3>
+              <span className="time">{c.startTime} – {c.endTime}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Step 2: pick a date for that clinic
+  if (!selectedDate) {
+    return (
+      <div style={{ padding: '16px 20px 40px' }}>
+        <button className="option-pill" style={{ marginBottom: 12 }} onClick={() => setSelectedClinic(null)}>← All Clinics</button>
+        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, margin: '0 0 10px' }}>{selectedClinic.name}</h3>
+        {loadingDates && <div className="loading-state">Loading dates…</div>}
+        {!loadingDates && dates.length === 0 && <div className="empty-state">No bookings recorded for this clinic yet.</div>}
+        <div className="clinic-list" style={{ padding: 0 }}>
+          {dates.map((d) => (
+            <div key={d.date} className="clinic-card" onClick={() => pickDate(d.date)}>
+              <div className="info">
+                <h3>{d.date}</h3>
+              </div>
+              <div className="price">{d.count} player{d.count === 1 ? '' : 's'}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Step 3: roster for that clinic + date
+  return (
+    <div style={{ padding: '16px 20px 40px', overflowX: 'auto' }}>
+      <button className="option-pill" style={{ marginBottom: 12 }} onClick={() => setSelectedDate(null)}>← {selectedClinic.name} Dates</button>
+      <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, margin: '0 0 10px' }}>{selectedClinic.name} — {selectedDate}</h3>
+      {loadingRoster && <div className="loading-state">Loading roster…</div>}
+      {!loadingRoster && roster.length === 0 && <div className="empty-state">No one booked for this date.</div>}
+      {!loadingRoster && roster.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr>
+              {['ClientName', 'ChildName', 'PlanType', 'PaymentMethod', 'PaymentStatus'].map((c) => (
+                <th key={c} style={{ textAlign: 'left', padding: '8px 10px', borderBottom: '2px solid var(--line)', fontFamily: 'var(--font-mono)', fontWeight: 400, color: 'var(--muted)' }}>
+                  {c}
+                </th>
+              ))}
+              <th style={{ padding: '8px 10px', borderBottom: '2px solid var(--line)' }} />
+            </tr>
+          </thead>
+          <tbody>
+            {roster.map((row, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid var(--line)' }}>
+                <td style={{ padding: '8px 10px' }}>{row.ClientName}</td>
+                <td style={{ padding: '8px 10px' }}>{row.ChildName}</td>
+                <td style={{ padding: '8px 10px' }}>{row.PlanType}</td>
+                <td style={{ padding: '8px 10px' }}>{row.PaymentMethod}</td>
+                <td style={{ padding: '8px 10px' }}>{row.PaymentStatus}</td>
+                <td style={{ padding: '8px 10px' }}>
+                  {row.PaymentStatus === 'pending' && (
+                    <button className="option-pill" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => markPaidAndRefresh(row.SignupID)}>
+                      Mark Paid
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
 }
 
 function PackSettingsEditor({ token, clinics }) {
