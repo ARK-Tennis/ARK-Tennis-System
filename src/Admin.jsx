@@ -287,33 +287,49 @@ function RosterTab({ token, clinics, onMarkPaid }) {
 }
 
 function PackSettingsEditor({ token, clinics }) {
-  const [settings, setSettings] = useState({}); // packGroup -> settings or null (not yet configured)
-  const [edits, setEdits] = useState({});
+  const [options, setOptions] = useState({}); // packGroup -> array of {packSize, packPrice, packExpiryDays}, or undefined until loaded
+  const [edits, setEdits] = useState({}); // `${packGroup}:${packSize}` -> partial edits
   const [saving, setSaving] = useState(null);
+  const [newSizeDrafts, setNewSizeDrafts] = useState({}); // packGroup -> {packSize, packPrice, packExpiryDays}
 
   // Distinct packGroups actually in use, e.g. "Junior-25", "Junior-30", "Junior-35", "Adult-40"
   const packGroups = [...new Set((clinics || []).map((c) => c.packGroup))].sort();
 
   useEffect(() => {
     packGroups.forEach((pg) => {
-      if (!(pg in settings)) {
-        apiGet('packSettings', { packGroup: pg }).then((s) => setSettings((prev) => ({ ...prev, [pg]: s })));
+      if (!(pg in options)) {
+        apiGet('packSettings', { packGroup: pg }).then((res) => setOptions((prev) => ({ ...prev, [pg]: Array.isArray(res) ? res : [] })));
       }
     });
   }, [clinics]); // eslint-disable-line
 
-  function setField(packGroup, field, value) {
-    setEdits((prev) => ({ ...prev, [packGroup]: { ...prev[packGroup], [field]: value } }));
+  function setField(packGroup, packSize, field, value) {
+    const key = `${packGroup}:${packSize}`;
+    setEdits((prev) => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
   }
 
-  async function save(packGroup) {
-    setSaving(packGroup);
-    const s = settings[packGroup] || {};
-    const merged = { ...s, ...edits[packGroup] };
-    await apiPost('updatePackSettings', { token, packGroup, ...merged });
+  async function save(packGroup, opt) {
+    const key = `${packGroup}:${opt.packSize}`;
+    setSaving(key);
+    const merged = { ...opt, ...edits[key] };
+    await apiPost('updatePackSettings', { token, packGroup, packSize: opt.packSize, ...merged });
     setSaving(null);
-    setEdits((prev) => ({ ...prev, [packGroup]: {} }));
-    apiGet('packSettings', { packGroup }).then((res) => setSettings((prev) => ({ ...prev, [packGroup]: res })));
+    setEdits((prev) => ({ ...prev, [key]: {} }));
+    apiGet('packSettings', { packGroup }).then((res) => setOptions((prev) => ({ ...prev, [packGroup]: Array.isArray(res) ? res : [] })));
+  }
+
+  function setDraftField(packGroup, field, value) {
+    setNewSizeDrafts((prev) => ({ ...prev, [packGroup]: { ...prev[packGroup], [field]: value } }));
+  }
+
+  async function createNewSize(packGroup) {
+    const draft = newSizeDrafts[packGroup] || {};
+    if (!draft.packSize) return;
+    setSaving(`${packGroup}:new`);
+    await apiPost('updatePackSettings', { token, packGroup, ...draft });
+    setSaving(null);
+    setNewSizeDrafts((prev) => ({ ...prev, [packGroup]: {} }));
+    apiGet('packSettings', { packGroup }).then((res) => setOptions((prev) => ({ ...prev, [packGroup]: Array.isArray(res) ? res : [] })));
   }
 
   if (packGroups.length === 0) return null;
@@ -322,36 +338,69 @@ function PackSettingsEditor({ token, clinics }) {
     <div style={{ marginBottom: 8 }}>
       <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, margin: '0 0 10px' }}>Pack Settings (by price tier)</h3>
       {packGroups.map((packGroup) => {
-        const s = settings[packGroup];
-        const edit = edits[packGroup] || {};
+        const opts = options[packGroup];
         const [category, price] = packGroup.split('-');
-        const needsSetup = s === null;
-        if (s === undefined) return <div key={packGroup} className="loading-state">Loading {packGroup}…</div>;
+        const draft = newSizeDrafts[packGroup] || {};
+
+        if (opts === undefined) return <div key={packGroup} className="loading-state">Loading {packGroup}…</div>;
+
         return (
-          <div key={packGroup} className="clinic-card" style={{ cursor: 'default', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
-            <div className="info" style={{ flex: '1 1 160px' }}>
-              <h3>{category} — ${price}/session</h3>
-              {needsSetup && <span className="time" style={{ color: 'var(--error)' }}>Not configured yet</span>}
+          <div key={packGroup} style={{ marginBottom: 14 }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
+              {category} — ${price}/session {opts.length === 0 && <span style={{ color: 'var(--error)' }}>— no pack sizes configured yet</span>}
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Sessions</label>
-                <input type="number" style={{ width: 70, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
-                  value={edit.packSize ?? s?.packSize ?? 8} onChange={(e) => setField(packGroup, 'packSize', e.target.value)} />
+
+            {opts.map((opt) => {
+              const key = `${packGroup}:${opt.packSize}`;
+              const edit = edits[key] || {};
+              return (
+                <div key={key} className="clinic-card" style={{ cursor: 'default', flexWrap: 'wrap', gap: 12, marginBottom: 8 }}>
+                  <div className="info" style={{ flex: '1 1 100px' }}>
+                    <h3>{opt.packSize}-Pack</h3>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Price</label>
+                      <input type="number" style={{ width: 90, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                        value={edit.packPrice ?? opt.packPrice} onChange={(e) => setField(packGroup, opt.packSize, 'packPrice', e.target.value)} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Expiry (days)</label>
+                      <input type="number" style={{ width: 80, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                        value={edit.packExpiryDays ?? opt.packExpiryDays} onChange={(e) => setField(packGroup, opt.packSize, 'packExpiryDays', e.target.value)} />
+                    </div>
+                    <button className="option-pill" style={{ padding: '10px 14px' }} disabled={saving === key} onClick={() => save(packGroup, opt)}>
+                      {saving === key ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            <div className="clinic-card" style={{ cursor: 'default', flexWrap: 'wrap', gap: 12, background: 'rgba(176, 141, 62, 0.06)' }}>
+              <div className="info" style={{ flex: '1 1 100px' }}>
+                <h3 style={{ fontSize: 14, color: 'var(--muted)' }}>+ Add Size</h3>
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Price</label>
-                <input type="number" style={{ width: 90, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
-                  value={edit.packPrice ?? s?.packPrice ?? ''} onChange={(e) => setField(packGroup, 'packPrice', e.target.value)} />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Sessions</label>
+                  <input type="number" style={{ width: 70, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                    value={draft.packSize ?? ''} placeholder="4" onChange={(e) => setDraftField(packGroup, 'packSize', e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Price</label>
+                  <input type="number" style={{ width: 90, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                    value={draft.packPrice ?? ''} placeholder="100" onChange={(e) => setDraftField(packGroup, 'packPrice', e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Expiry (days)</label>
+                  <input type="number" style={{ width: 80, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
+                    value={draft.packExpiryDays ?? 120} onChange={(e) => setDraftField(packGroup, 'packExpiryDays', e.target.value)} />
+                </div>
+                <button className="option-pill" style={{ padding: '10px 14px' }} disabled={!draft.packSize || saving === `${packGroup}:new`} onClick={() => createNewSize(packGroup)}>
+                  {saving === `${packGroup}:new` ? 'Adding…' : 'Add'}
+                </button>
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Expiry (days)</label>
-                <input type="number" style={{ width: 80, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}
-                  value={edit.packExpiryDays ?? s?.packExpiryDays ?? 120} onChange={(e) => setField(packGroup, 'packExpiryDays', e.target.value)} />
-              </div>
-              <button className="option-pill" style={{ padding: '10px 14px' }} disabled={saving === packGroup} onClick={() => save(packGroup)}>
-                {saving === packGroup ? 'Saving…' : needsSetup ? 'Create' : 'Save'}
-              </button>
             </div>
           </div>
         );
@@ -516,12 +565,13 @@ function CancelClassForm({ token, clinics, onCancelled }) {
 function ManualPackForm({ token, clinics, onAdded }) {
   const [open, setOpen] = useState(false);
   const [packGroup, setPackGroup] = useState('');
+  const [packSize, setPackSize] = useState(null);
   const [clientName, setClientName] = useState('');
   const [childName, setChildName] = useState('');
   const [contactValue, setContactValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('other');
   const [submitting, setSubmitting] = useState(false);
-  const [packSettings, setPackSettings] = useState(null);
+  const [packOptions, setPackOptions] = useState([]);
 
   const packGroups = [...new Set((clinics || []).map((c) => c.packGroup))].sort();
   const category = packGroup.split('-')[0];
@@ -529,15 +579,20 @@ function ManualPackForm({ token, clinics, onAdded }) {
 
   useEffect(() => {
     if (packGroup) {
-      apiGet('packSettings', { packGroup }).then(setPackSettings);
+      apiGet('packSettings', { packGroup }).then((options) => {
+        const list = Array.isArray(options) ? options : [];
+        setPackOptions(list);
+        setPackSize(list.length > 0 ? list[list.length - 1].packSize : null);
+      });
     } else {
-      setPackSettings(null);
+      setPackOptions([]);
+      setPackSize(null);
     }
   }, [packGroup]);
 
   async function submit() {
     setSubmitting(true);
-    await apiPost('adminAddPack', { token, packGroup, clientName, childName, contactValue, paymentMethod });
+    await apiPost('adminAddPack', { token, packGroup, packSize, clientName, childName, contactValue, paymentMethod });
     setSubmitting(false);
     setClientName('');
     setChildName('');
@@ -566,17 +621,25 @@ function ManualPackForm({ token, clinics, onAdded }) {
             return <option key={pg} value={pg}>{cat} — ${price}/session</option>;
           })}
         </select>
-        {packGroup && packSettings && (
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
-            {packSettings.packSize}-session pack, ${packSettings.packPrice}, valid {packSettings.packExpiryDays} days
-          </div>
-        )}
-        {packGroup && packSettings === null && (
+        {packGroup && packOptions.length === 0 && (
           <div style={{ fontSize: 12, color: 'var(--error)', marginTop: 6 }}>
             This pack tier isn't configured yet — set it up in the Clinics tab's Pack Settings first.
           </div>
         )}
       </div>
+      {packGroup && packOptions.length > 0 && (
+        <div className="field">
+          <label>Size</label>
+          <div className="option-row">
+            {packOptions.map((o) => (
+              <div key={o.packSize} className={`option-pill ${packSize === o.packSize ? 'active' : ''}`} onClick={() => setPackSize(o.packSize)}>
+                {o.packSize}-Pack
+                <span className="sub">${o.packPrice}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="field">
         <label>{isJunior ? 'Parent / Guardian Name' : 'Client Name'}</label>
         <input value={clientName} onChange={(e) => setClientName(e.target.value)} />
@@ -602,7 +665,7 @@ function ManualPackForm({ token, clinics, onAdded }) {
         </div>
       </div>
       <div className="option-row">
-        <button className="submit-btn" disabled={!packGroup || !clientName || submitting} onClick={submit}>
+        <button className="submit-btn" disabled={!packGroup || !packSize || !clientName || submitting} onClick={submit}>
           {submitting ? 'Recording…' : 'Record Purchase'}
         </button>
         <button className="submit-btn" style={{ background: 'var(--line)', color: 'var(--charcoal)' }} onClick={() => setOpen(false)}>

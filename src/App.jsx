@@ -128,8 +128,8 @@ function PacksTab() {
         )}
         {tiers.map((t) => (
           <div
-            key={t.packGroup}
-            className={`clinic-card ${selectedTier?.packGroup === t.packGroup ? 'selected' : ''}`}
+            key={`${t.packGroup}-${t.packSize}`}
+            className={`clinic-card ${selectedTier?.packGroup === t.packGroup && selectedTier?.packSize === t.packSize ? 'selected' : ''}`}
             onClick={() => setSelectedTier(t)}
           >
             <div className="info">
@@ -163,6 +163,7 @@ function StandalonePackForm({ tier }) {
     try {
       const res = await apiPost('buyPack', {
         packGroup: tier.packGroup,
+        packSize: tier.packSize,
         clientName,
         childName,
         contactMethod: 'email',
@@ -229,7 +230,8 @@ function BookingForm({ clinic, grips }) {
   const [result, setResult] = useState(null);
   const [packLookup, setPackLookup] = useState(null); // null = not checked, {found:false} or {found:true,...}
   const [checkingPack, setCheckingPack] = useState(false);
-  const [packSettings, setPackSettings] = useState(null); // { packSize, packPrice, packExpiryDays } for this clinic's category
+  const [packOptions, setPackOptions] = useState([]); // array of { packSize, packPrice, packExpiryDays } — this clinic's tier may offer more than one size
+  const [selectedPackSize, setSelectedPackSize] = useState(null);
   const [availablePack, setAvailablePack] = useState(null); // silently-detected pack usable during single-session checkout
 
   const availablePackRequestId = useRef(0);
@@ -261,7 +263,11 @@ function BookingForm({ clinic, grips }) {
   }, [mode, clinic]);
 
   useEffect(() => {
-    apiGet('packSettings', { packGroup: clinic.packGroup }).then(setPackSettings);
+    apiGet('packSettings', { packGroup: clinic.packGroup }).then((options) => {
+      const list = Array.isArray(options) ? options : [];
+      setPackOptions(list);
+      setSelectedPackSize(list.length > 0 ? list[list.length - 1].packSize : null); // default to the largest size
+    });
   }, [clinic]);
 
   // Once we know we're using an existing pack, we still need open slots to pick a date from.
@@ -304,7 +310,7 @@ function BookingForm({ clinic, grips }) {
       : usingExistingPack
       ? selectedDates.length > 0 && (!isJunior || childName)
       : buyingNewPack
-      ? clientName && validEmail && paymentMethod && (!isJunior || childName)
+      ? clientName && validEmail && paymentMethod && !!selectedPackSize && (!isJunior || childName)
       : false;
 
   async function handleSubmit() {
@@ -335,6 +341,7 @@ function BookingForm({ clinic, grips }) {
       } else if (buyingNewPack) {
         const res = await apiPost('buyPack', {
           packGroup: clinic.packGroup,
+          packSize: selectedPackSize,
           clientName,
           childName,
           contactMethod,
@@ -388,8 +395,12 @@ function BookingForm({ clinic, grips }) {
             <span className="sub">${clinic.sessionPrice}</span>
           </div>
           <div className={`option-pill ${mode === 'pack' ? 'active' : ''}`} onClick={() => setMode('pack')}>
-            {packSettings ? `Purchase or Use ${packSettings.packSize}-Pack Session` : 'Purchase or Use Pack Session'}
-            {packSettings && <span className="sub">${packSettings.packPrice} · usable at ${clinic.packGroup.split('-')[1]} {clinic.category.toLowerCase()} clinics</span>}
+            Purchase or Use Pack Session
+            {packOptions.length > 0 && (
+              <span className="sub">
+                {packOptions.map((o) => `${o.packSize}-pack $${o.packPrice}`).join(' · ')} · usable at ${clinic.packGroup.split('-')[1]} {clinic.category.toLowerCase()} clinics
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -564,8 +575,27 @@ function BookingForm({ clinic, grips }) {
       {buyingNewPack && (
         <>
           <div className="empty-state" style={{ padding: '8px 0' }}>
-            No active pack found for that contact — buy a new {packSettings ? packSettings.packSize : ''}-session pack below (usable at ${clinic.packGroup.split('-')[1]} {clinic.category.toLowerCase()} clinics).
+            No active pack found for that contact — pick a size below to buy one (usable at ${clinic.packGroup.split('-')[1]} {clinic.category.toLowerCase()} clinics).
           </div>
+
+          {packOptions.length > 0 && (
+            <div className="field">
+              <label>Pack Size</label>
+              <div className="option-row">
+                {packOptions.map((o) => (
+                  <div
+                    key={o.packSize}
+                    className={`option-pill ${selectedPackSize === o.packSize ? 'active' : ''}`}
+                    onClick={() => setSelectedPackSize(o.packSize)}
+                  >
+                    {o.packSize}-Pack
+                    <span className="sub">${o.packPrice}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="field">
             <label>Payment Method</label>
             <div className="option-row">
