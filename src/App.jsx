@@ -44,13 +44,13 @@ export default function App() {
           className={category === 'Junior' ? 'active' : ''}
           onClick={() => { setCategory('Junior'); setSelected(null); }}
         >
-          Signups Junior
+          Junior
         </button>
         <button
           className={category === 'Adult' ? 'active' : ''}
           onClick={() => { setCategory('Adult'); setSelected(null); }}
         >
-          Signups Adult
+          Adult
         </button>
         <button
           className={category === 'Packs' ? 'active' : ''}
