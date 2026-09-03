@@ -16,6 +16,7 @@ export default function App() {
   const [loadingClinics, setLoadingClinics] = useState(true);
   const [grips, setGrips] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [unlockedClinics, setUnlockedClinics] = useState([]); // clinicIds unlocked this session
 
   useEffect(() => {
     if (category === 'Packs') return;
@@ -43,13 +44,13 @@ export default function App() {
           className={category === 'Junior' ? 'active' : ''}
           onClick={() => { setCategory('Junior'); setSelected(null); }}
         >
-          Junior
+          Signups Junior
         </button>
         <button
           className={category === 'Adult' ? 'active' : ''}
           onClick={() => { setCategory('Adult'); setSelected(null); }}
         >
-          Adult
+          Signups Adult
         </button>
         <button
           className={category === 'Packs' ? 'active' : ''}
@@ -76,7 +77,7 @@ export default function App() {
               >
                 <div className="info">
                   <span className="clinic-day">{c.dayOfWeek}</span>
-                  <h3>{c.name}</h3>
+                  <h3>{c.locked && '🔒 '}{c.name}</h3>
                   <span className="time">{c.startTime} – {c.endTime}</span>
                 </div>
                 <div className="price">${c.sessionPrice}</div>
@@ -84,18 +85,66 @@ export default function App() {
             ))}
           </div>
 
-          {selected && (
+          {selected && selected.locked && !unlockedClinics.includes(selected.clinicId) && (
+            <PasswordGate
+              clinic={selected}
+              onUnlock={() => setUnlockedClinics((prev) => [...prev, selected.clinicId])}
+            />
+          )}
+
+          {selected && (!selected.locked || unlockedClinics.includes(selected.clinicId)) && (
             <div className="booking-form" style={{ paddingBottom: 0 }}>
               {selected.description && <p style={{ color: 'var(--muted)', fontSize: 14, margin: '0 0 4px' }}>{selected.description}</p>}
             </div>
           )}
-          {selected && <BookingForm clinic={selected} grips={grips} />}
+          {selected && (!selected.locked || unlockedClinics.includes(selected.clinicId)) && (
+            <BookingForm clinic={selected} grips={grips} />
+          )}
         </>
       )}
 
       <nav className="footer-nav">
         <Link to="/stringing" className="stringing-link">String a Racket</Link>
       </nav>
+    </div>
+  );
+}
+
+function PasswordGate({ clinic, onUnlock }) {
+  const [password, setPassword] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState(false);
+
+  async function submit() {
+    setChecking(true);
+    setError(false);
+    const res = await apiPost('unlockClinic', { clinicId: clinic.clinicId, password });
+    setChecking(false);
+    if (res.success) {
+      onUnlock();
+    } else {
+      setError(true);
+    }
+  }
+
+  return (
+    <div className="booking-form">
+      <div className="empty-state" style={{ padding: '8px 0' }}>
+        🔒 This clinic is private. Enter the password to book.
+      </div>
+      <div className="field">
+        <label>Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setError(false); }}
+          onKeyDown={(e) => e.key === 'Enter' && submit()}
+        />
+        {error && <div style={{ color: 'var(--error)', fontSize: 13, marginTop: 6 }}>Incorrect password.</div>}
+      </div>
+      <button className="submit-btn" disabled={!password || checking} onClick={submit}>
+        {checking ? 'Checking…' : 'Unlock'}
+      </button>
     </div>
   );
 }
