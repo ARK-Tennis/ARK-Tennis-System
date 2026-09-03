@@ -409,7 +409,8 @@ function BookingForm({ clinic, grips }) {
           packId: availablePack.packId,
           sessionDate: selectedDate,
         });
-        setResult({ type: 'single', ...res });
+        if (res.error) setResult({ type: 'error', message: res.error });
+        else setResult({ type: 'single', ...res });
       } else {
         const res = await apiPost('signup', {
           clinicId: clinic.clinicId,
@@ -422,7 +423,8 @@ function BookingForm({ clinic, grips }) {
           paymentMethod,
           gripAddOn,
         });
-        setResult({ type: 'single', ...res });
+        if (res.error) setResult({ type: 'error', message: res.error });
+        else setResult({ type: 'single', ...res });
       }
     } catch (err) {
       setResult({ type: 'error', message: 'Something went wrong — please try again.' });
