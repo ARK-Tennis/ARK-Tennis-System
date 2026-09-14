@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { apiGet, apiPost } from './api.js';
 
 const TOKEN_KEY = 'ark_admin_token';
@@ -642,7 +642,7 @@ function ManualPackForm({ token, clinics, onAdded }) {
       )}
       <div className="field">
         <label>{isJunior ? 'Parent / Guardian Name' : 'Client Name'}</label>
-        <input value={clientName} onChange={(e) => setClientName(e.target.value)} />
+        <ClientAutocomplete token={token} query={clientName} onQueryChange={setClientName} onPick={(s) => { setClientName(s.name); setContactValue(s.email); }} placeholder="Start typing a name or email…" />
       </div>
       {isJunior && (
         <div className="field">
@@ -652,7 +652,7 @@ function ManualPackForm({ token, clinics, onAdded }) {
       )}
       <div className="field">
         <label>Email (optional — enables confirmation email + group add)</label>
-        <input type="email" value={contactValue} onChange={(e) => setContactValue(e.target.value)} placeholder="you@example.com" />
+        <ClientAutocomplete token={token} query={contactValue} onQueryChange={setContactValue} onPick={(s) => { setClientName(s.name); setContactValue(s.email); }} placeholder="you@example.com" type="email" />
       </div>
       <div className="field">
         <label>Payment Method</label>
@@ -676,18 +676,75 @@ function ManualPackForm({ token, clinics, onAdded }) {
   );
 }
 
+function ClientAutocomplete({ token, query, onQueryChange, onPick, placeholder, type }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const [show, setShow] = useState(false);
+  const debounceRef = useRef(null);
+
+  function handleChange(value) {
+    onQueryChange(value);
+    setShow(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.length < 2) { setSuggestions([]); return; }
+    debounceRef.current = setTimeout(async () => {
+      const res = await apiGet('adminClientSearch', { token, q: value });
+      setSuggestions(Array.isArray(res) ? res : []);
+    }, 250);
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        type={type || 'text'}
+        value={query}
+        onChange={(e) => handleChange(e.target.value)}
+        onFocus={() => setShow(true)}
+        onBlur={() => setTimeout(() => setShow(false), 150)}
+        placeholder={placeholder}
+      />
+      {show && suggestions.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 8, marginTop: 4, zIndex: 10, boxShadow: 'var(--shadow)' }}>
+          {suggestions.map((s) => (
+            <div
+              key={s.email}
+              style={{ padding: '10px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid var(--line)' }}
+              onMouseDown={() => { onPick(s); setShow(false); }}
+            >
+              <strong>{s.name}</strong> — <span style={{ color: 'var(--muted)' }}>{s.email}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WalkInForm({ token, clinics, onAdded }) {
   const [open, setOpen] = useState(false);
   const [clinicId, setClinicId] = useState('');
+  const [dates, setDates] = useState([]);
+  const [loadingDates, setLoadingDates] = useState(false);
+  const [sessionDate, setSessionDate] = useState('');
   const [clientName, setClientName] = useState('');
   const [contactValue, setContactValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('other');
-  const [sessionDate] = useState(new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
   const [pack, setPack] = useState(null); // null = not checked, {found:false/true,...}
   const [checkingPack, setCheckingPack] = useState(false);
 
   const selectedClinic = clinics.find((c) => c.clinicId === clinicId);
+
+  useEffect(() => {
+    setSessionDate('');
+    setDates([]);
+    if (clinicId) {
+      setLoadingDates(true);
+      apiGet('slots', { clinicId, weeks: 6 }).then((data) => {
+        setDates(Array.isArray(data) ? data : []);
+        setLoadingDates(false);
+      });
+    }
+  }, [clinicId]);
 
   async function checkPack() {
     if (!selectedClinic || !contactValue) return;
@@ -695,6 +752,12 @@ function WalkInForm({ token, clinics, onAdded }) {
     const res = await apiGet('myPack', { packGroup: selectedClinic.packGroup, contactValue });
     setPack(res);
     setCheckingPack(false);
+  }
+
+  function pickClient(s) {
+    setClientName(s.name);
+    setContactValue(s.email);
+    setPack(null);
   }
 
   async function submit() {
@@ -710,6 +773,7 @@ function WalkInForm({ token, clinics, onAdded }) {
     setClientName('');
     setContactValue('');
     setClinicId('');
+    setSessionDate('');
     setPack(null);
     setPaymentMethod('other');
     onAdded();
@@ -724,7 +788,7 @@ function WalkInForm({ token, clinics, onAdded }) {
     );
   }
 
-  const canSubmit = clinicId && clientName && (paymentMethod !== 'pack' || pack?.found);
+  const canSubmit = clinicId && sessionDate && clientName && (paymentMethod !== 'pack' || pack?.found);
 
   return (
     <div className="booking-form" style={{ paddingTop: 16 }}>
@@ -737,14 +801,30 @@ function WalkInForm({ token, clinics, onAdded }) {
           ))}
         </select>
       </div>
+      {clinicId && (
+        <div className="field">
+          <label>Date</label>
+          {loadingDates && <div className="loading-state">Loading dates…</div>}
+          {!loadingDates && (
+            <select value={sessionDate} onChange={(e) => setSessionDate(e.target.value)}>
+              <option value="">Choose a date</option>
+              {dates.map((d) => (
+                <option key={d.date} value={d.date}>{d.date} — {d.spotsLeft} spots left</option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
       <div className="field">
         <label>Client Name</label>
-        <input value={clientName} onChange={(e) => setClientName(e.target.value)} />
+        <ClientAutocomplete token={token} query={clientName} onQueryChange={setClientName} onPick={pickClient} placeholder="Start typing a name or email…" />
       </div>
       <div className="field">
         <label>Email (optional — needed to check for a pack)</label>
         <div style={{ display: 'flex', gap: 8 }}>
-          <input style={{ flex: 1 }} type="email" value={contactValue} onChange={(e) => { setContactValue(e.target.value); setPack(null); }} placeholder="you@example.com" />
+          <div style={{ flex: 1 }}>
+            <ClientAutocomplete token={token} query={contactValue} onQueryChange={(v) => { setContactValue(v); setPack(null); }} onPick={pickClient} placeholder="you@example.com" type="email" />
+          </div>
           <button className="option-pill" style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} disabled={!clinicId || !contactValue || checkingPack} onClick={checkPack}>
             {checkingPack ? 'Checking…' : 'Check Pack'}
           </button>
