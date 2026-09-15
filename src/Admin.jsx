@@ -89,7 +89,7 @@ function Dashboard({ token }) {
       <CancelClassForm token={token} clinics={clinics} onCancelled={refresh} />
 
       <div className="category-toggle" style={{ margin: '20px 20px 4px' }}>
-        {['roster', 'signups', 'packs', 'stringingOrders', 'makeupCredits', 'clinics'].map((t) => (
+        {['roster', 'packLookup', 'signups', 'packs', 'stringingOrders', 'makeupCredits', 'clinics'].map((t) => (
           <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
             {labelFor(t)}
           </button>
@@ -100,6 +100,8 @@ function Dashboard({ token }) {
         <ClinicsEditor token={token} clinics={adminClinics} onSaved={refresh} />
       ) : tab === 'roster' ? (
         <RosterTab token={token} clinics={adminClinics} onMarkPaid={markPaid} />
+      ) : tab === 'packLookup' ? (
+        <PackLookupTab token={token} />
       ) : (
         <div style={{ padding: '16px 20px 40px', overflowX: 'auto' }}>
           <DataTable
@@ -114,7 +116,7 @@ function Dashboard({ token }) {
 }
 
 function labelFor(t) {
-  return { roster: 'Roster', signups: 'Bookings', packs: 'Packs', stringingOrders: 'Stringing', makeupCredits: 'Makeup Credits', clinics: 'Clinics' }[t];
+  return { roster: 'Roster', packLookup: 'Pack Lookup', signups: 'Bookings', packs: 'Packs', stringingOrders: 'Stringing', makeupCredits: 'Makeup Credits', clinics: 'Clinics' }[t];
 }
 
 const SHEET_META = {
@@ -168,6 +170,118 @@ function DataTable({ rows, tab, onMarkPaid }) {
 
 function tabToSheetName(tab) {
   return { signups: 'Signups', packs: 'Packs', stringingOrders: 'StringingOrders', makeupCredits: 'MakeupCredits' }[tab];
+}
+
+function PackLookupTab({ token }) {
+  const [query, setQuery] = useState('');
+  const [contactValue, setContactValue] = useState('');
+  const [detail, setDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [reconciliation, setReconciliation] = useState(null);
+  const [checkingReconciliation, setCheckingReconciliation] = useState(false);
+
+  async function pickClient(s) {
+    setQuery(s.name);
+    setContactValue(s.email);
+    setLoading(true);
+    const res = await apiGet('adminClientPackDetail', { token, contactValue: s.email });
+    setDetail(res);
+    setLoading(false);
+  }
+
+  async function checkReconciliation() {
+    setCheckingReconciliation(true);
+    const res = await apiGet('adminPackReconciliation', { token });
+    setReconciliation(Array.isArray(res) ? res : []);
+    setCheckingReconciliation(false);
+  }
+
+  return (
+    <div style={{ padding: '16px 20px 40px' }}>
+      <div className="field">
+        <label>Look up a client's pack(s)</label>
+        <ClientAutocomplete token={token} query={query} onQueryChange={setQuery} onPick={pickClient} placeholder="Start typing a name or email…" />
+      </div>
+
+      {loading && <div className="loading-state">Loading pack detail…</div>}
+
+      {detail && !loading && (
+        <div style={{ marginTop: 16 }}>
+          {detail.packs.length === 0 && <div className="empty-state">No packs found for this contact.</div>}
+          {detail.packs.map((p) => (
+            <div key={p.packId} className="clinic-card" style={{ cursor: 'default', flexDirection: 'column', alignItems: 'stretch', gap: 10, marginBottom: 12 }}>
+              <div className="info">
+                <span className="clinic-day">{p.packGroup}</span>
+                <h3>{p.sessionsRemaining} of {p.sessionsTotal} remaining</h3>
+                <span className="time">Purchased {p.purchaseDate} · Expires {p.expiryDate} · ${p.pricePaid} · {p.paymentStatus}</span>
+              </div>
+
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>BOOKINGS AGAINST THIS PACK ({p.bookings.length})</div>
+                {p.bookings.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)' }}>None yet.</div>}
+                {p.bookings.map((b, i) => (
+                  <div key={i} style={{ fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--line)' }}>
+                    {b.clinicId} — {b.sessionDate} {b.bookingStatus === 'cancelled' && <span style={{ color: 'var(--error)' }}>(cancelled)</span>}
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>HISTORY</div>
+                {p.history.length === 0 && <div style={{ fontSize: 13, color: 'var(--muted)' }}>No history logged (pack predates the audit trail).</div>}
+                {p.history.map((h, i) => (
+                  <div key={i} style={{ fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--line)' }}>
+                    <strong>{h.change > 0 ? `+${h.change}` : h.change}</strong> → {h.resultingRemaining} remaining — {h.note} <span style={{ color: 'var(--muted)' }}>({h.timestamp})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {detail.makeupCredits && detail.makeupCredits.length > 0 && (
+            <div className="clinic-card" style={{ cursor: 'default', flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+              <div className="info"><h3>Makeup Credits</h3></div>
+              {detail.makeupCredits.map((c, i) => (
+                <div key={i} style={{ fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--line)' }}>
+                  {c.OriginClinicID} — {c.OriginDate} — <strong>{c.Status}</strong>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--line)' }}>
+        <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 16, margin: '0 0 10px' }}>Reconciliation Check</h3>
+        <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 10px' }}>
+          Cross-checks every pack's remaining-sessions count against its actual booking history and flags anything that doesn't add up.
+        </p>
+        <button className="submit-btn" disabled={checkingReconciliation} onClick={checkReconciliation}>
+          {checkingReconciliation ? 'Checking…' : 'Check All Packs'}
+        </button>
+
+        {reconciliation && (
+          <div style={{ marginTop: 12 }}>
+            {reconciliation.length === 0 ? (
+              <div className="confirmation"><p style={{ margin: 0 }}>Everything checks out — no mismatches found.</p></div>
+            ) : (
+              reconciliation.map((r) => (
+                <div key={r.packId} className="clinic-card" style={{ cursor: 'default', marginBottom: 8 }}>
+                  <div className="info">
+                    <h3>{r.clientName} — {r.packGroup}</h3>
+                    <span className="time">{r.contactValue}</span>
+                  </div>
+                  <div style={{ color: 'var(--error)', fontSize: 13, fontWeight: 600 }}>
+                    Shows {r.storedRemaining}, expected {r.expectedRemaining}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function RosterTab({ token, clinics, onMarkPaid }) {
