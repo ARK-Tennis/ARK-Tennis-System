@@ -853,7 +853,7 @@ function WalkInForm({ token, clinics, onAdded }) {
     setDates([]);
     if (clinicId) {
       setLoadingDates(true);
-      apiGet('slots', { clinicId, weeks: 6 }).then((data) => {
+      apiGet('adminWalkInSlots', { token, clinicId }).then((data) => {
         setDates(Array.isArray(data) ? data : []);
         setLoadingDates(false);
       });
@@ -923,7 +923,9 @@ function WalkInForm({ token, clinics, onAdded }) {
             <select value={sessionDate} onChange={(e) => setSessionDate(e.target.value)}>
               <option value="">Choose a date</option>
               {dates.map((d) => (
-                <option key={d.date} value={d.date}>{d.date} — {d.spotsLeft} spots left</option>
+                <option key={d.date} value={d.date}>
+                  {d.date}{d.past ? ' (already happened)' : ''} — {d.spotsLeft} spots left
+                </option>
               ))}
             </select>
           )}
