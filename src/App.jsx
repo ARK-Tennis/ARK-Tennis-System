@@ -195,6 +195,48 @@ function PacksTab() {
   );
 }
 
+/**
+ * Only ever renders for a client who hasn't accepted the waiver yet — checks live as a
+ * valid email is typed, and reports readiness (accepted-already OR checked-now) via
+ * onReadyChange so the parent form's submit button can gate on it.
+ */
+function WaiverGate({ contactValue, checked, onCheckedChange, onReadyChange }) {
+  const [status, setStatus] = useState(null); // null = not checked yet, else {accepted}
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    const id = ++requestId.current;
+    if (EMAIL_PATTERN.test(contactValue)) {
+      apiGet('waiverStatus', { contactValue }).then((res) => {
+        if (id !== requestId.current) return;
+        setStatus(res);
+      });
+    } else {
+      setStatus(null);
+    }
+  }, [contactValue]);
+
+  useEffect(() => {
+    const needsWaiver = !!(status && !status.accepted);
+    onReadyChange(!needsWaiver || checked);
+  }, [status, checked]); // eslint-disable-line
+
+  if (!status || status.accepted) return null;
+
+  return (
+    <div className="field">
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontWeight: 400 }}>
+        <input type="checkbox" checked={checked} onChange={(e) => onCheckedChange(e.target.checked)} style={{ marginTop: 3 }} />
+        <span style={{ fontSize: 13 }}>
+          I acknowledge that tennis involves physical risk of injury, and I assume that risk for myself (or my child)
+          participating in ARK Tennis programs. I agree to ARK Tennis's full{' '}
+          <a href="/waiver" target="_blank" rel="noreferrer">waiver and release of liability</a>.
+        </span>
+      </label>
+    </div>
+  );
+}
+
 function StandalonePackForm({ tier }) {
   const [clientName, setClientName] = useState('');
   const [childName, setChildName] = useState('');
@@ -202,10 +244,12 @@ function StandalonePackForm({ tier }) {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [waiverReady, setWaiverReady] = useState(true);
+  const [waiverChecked, setWaiverChecked] = useState(false);
 
   const isJunior = tier.category === 'Junior';
   const validEmail = EMAIL_PATTERN.test(contactValue);
-  const canSubmit = clientName && validEmail && paymentMethod && (!isJunior || childName);
+  const canSubmit = clientName && validEmail && paymentMethod && waiverReady && (!isJunior || childName);
 
   async function submit() {
     setSubmitting(true);
@@ -218,8 +262,10 @@ function StandalonePackForm({ tier }) {
         contactMethod: 'email',
         contactValue,
         paymentMethod,
+        waiverAccepted: waiverChecked,
       });
-      setResult(res);
+      if (res.error) setResult({ error: true, message: res.error });
+      else setResult(res);
     } catch (err) {
       setResult({ error: true });
     }
@@ -246,6 +292,7 @@ function StandalonePackForm({ tier }) {
         <label>Email Address</label>
         <input type="email" value={contactValue} onChange={(e) => setContactValue(e.target.value)} placeholder="you@example.com" />
       </div>
+      <WaiverGate contactValue={contactValue} checked={waiverChecked} onCheckedChange={setWaiverChecked} onReadyChange={setWaiverReady} />
       <div className="field">
         <label>Payment Method</label>
         <div className="option-row">
@@ -256,6 +303,7 @@ function StandalonePackForm({ tier }) {
           ))}
         </div>
       </div>
+      {result?.error && <div className="empty-state" style={{ color: 'var(--error)' }}>{result.message || 'Something went wrong — please try again.'}</div>}
       <button className="submit-btn" disabled={!canSubmit || submitting} onClick={submit}>
         {submitting ? 'Buying…' : 'Buy Pack'}
       </button>
@@ -282,6 +330,8 @@ function BookingForm({ clinic, grips }) {
   const [packOptions, setPackOptions] = useState([]); // array of { packSize, packPrice, packExpiryDays } — this clinic's tier may offer more than one size
   const [selectedPackSize, setSelectedPackSize] = useState(null);
   const [availablePack, setAvailablePack] = useState(null); // silently-detected pack usable during single-session checkout
+  const [waiverReady, setWaiverReady] = useState(true);
+  const [waiverChecked, setWaiverChecked] = useState(false);
 
   const availablePackRequestId = useRef(0);
 
@@ -355,11 +405,11 @@ function BookingForm({ clinic, grips }) {
     mode === 'single'
       ? clientName && validEmail && paymentMethod &&
         (paymentMethod !== 'pack' || !!availablePack) &&
-        selectedDate && (!isJunior || childName)
+        waiverReady && selectedDate && (!isJunior || childName)
       : usingExistingPack
       ? selectedDates.length > 0 && (!isJunior || childName)
       : buyingNewPack
-      ? clientName && validEmail && paymentMethod && !!selectedPackSize && (!isJunior || childName)
+      ? clientName && validEmail && paymentMethod && waiverReady && !!selectedPackSize && (!isJunior || childName)
       : false;
 
   async function handleSubmit() {
@@ -396,8 +446,10 @@ function BookingForm({ clinic, grips }) {
           contactMethod,
           contactValue,
           paymentMethod,
+          waiverAccepted: waiverChecked,
         });
-        setResult({ type: 'pack', ...res });
+        if (res.error) setResult({ type: 'error', message: res.error });
+        else setResult({ type: 'pack', ...res });
       } else if (paymentMethod === 'pack' && availablePack) {
         const res = await apiPost('signup', {
           clinicId: clinic.clinicId,
@@ -422,6 +474,7 @@ function BookingForm({ clinic, grips }) {
           sessionDate: selectedDate,
           paymentMethod,
           gripAddOn,
+          waiverAccepted: waiverChecked,
         });
         if (res.error) setResult({ type: 'error', message: res.error });
         else setResult({ type: 'single', ...res });
@@ -512,6 +565,8 @@ function BookingForm({ clinic, grips }) {
               placeholder="you@example.com"
             />
           </div>
+
+          <WaiverGate contactValue={contactValue} checked={waiverChecked} onCheckedChange={setWaiverChecked} onReadyChange={setWaiverReady} />
 
           {paymentMethod === 'pack' && (
             <div className="confirmation" style={{ margin: '4px 0' }}>
@@ -646,6 +701,8 @@ function BookingForm({ clinic, grips }) {
               </div>
             </div>
           )}
+
+          <WaiverGate contactValue={contactValue} checked={waiverChecked} onCheckedChange={setWaiverChecked} onReadyChange={setWaiverReady} />
 
           <div className="field">
             <label>Payment Method</label>

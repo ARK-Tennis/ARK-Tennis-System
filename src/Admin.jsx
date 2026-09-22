@@ -74,6 +74,11 @@ function Dashboard({ token }) {
     refresh();
   }
 
+  async function markComplete(orderId) {
+    await apiPost('adminMarkStringingComplete', { token, orderId });
+    refresh();
+  }
+
   if (!data) return <div className="page"><div className="loading-state">Loading dashboard…</div></div>;
 
   return (
@@ -86,6 +91,7 @@ function Dashboard({ token }) {
 
       <WalkInForm token={token} clinics={clinics} onAdded={refresh} />
       <ManualPackForm token={token} clinics={adminClinics} onAdded={refresh} />
+      <StringingOrderForm token={token} onAdded={refresh} />
       <CancelClassForm token={token} clinics={clinics} onCancelled={refresh} />
 
       <div className="category-toggle" style={{ margin: '20px 20px 4px' }}>
@@ -108,6 +114,7 @@ function Dashboard({ token }) {
             rows={data[tab] || []}
             tab={tab}
             onMarkPaid={markPaid}
+            onMarkComplete={markComplete}
           />
         </div>
       )}
@@ -122,11 +129,11 @@ function labelFor(t) {
 const SHEET_META = {
   signups: { idCol: 'SignupID', columns: ['ClientName', 'ChildName', 'ClinicID', 'SessionDate', 'PlanType', 'PaymentMethod', 'PaymentStatus', 'Source'] },
   packs: { idCol: 'PackId', columns: ['ClientName', 'ChildName', 'PackGroup', 'SessionsRemaining', 'ExpiryDate', 'PricePaid', 'PaymentMethod', 'PaymentStatus'] },
-  stringingOrders: { idCol: 'OrderID', columns: ['ClientName', 'RacketDescription', 'StringID', 'Tension', 'RequestedCompletionDate', 'PaymentMethod', 'PaymentStatus', 'Status'] },
+  stringingOrders: { idCol: 'OrderID', columns: ['ClientName', 'RacketDescription', 'StringID', 'Tension', 'DateReceived', 'DateCompleted', 'PaymentMethod', 'PaymentStatus', 'Status'] },
   makeupCredits: { idCol: 'CreditID', columns: ['ClientName', 'OriginClinicID', 'OriginDate', 'Status', 'ExpiryDate'] },
 };
 
-function DataTable({ rows, tab, onMarkPaid }) {
+function DataTable({ rows, tab, onMarkPaid, onMarkComplete }) {
   const meta = SHEET_META[tab];
   if (!rows || rows.length === 0) return <div className="empty-state">Nothing here yet.</div>;
 
@@ -140,6 +147,7 @@ function DataTable({ rows, tab, onMarkPaid }) {
             </th>
           ))}
           {meta.columns.includes('PaymentStatus') && <th style={{ padding: '8px 10px', borderBottom: '2px solid var(--line)' }} />}
+          {tab === 'stringingOrders' && <th style={{ padding: '8px 10px', borderBottom: '2px solid var(--line)' }} />}
         </tr>
       </thead>
       <tbody>
@@ -157,6 +165,19 @@ function DataTable({ rows, tab, onMarkPaid }) {
                     onClick={() => onMarkPaid(tabToSheetName(tab), row[meta.idCol], meta.idCol)}
                   >
                     Mark Paid
+                  </button>
+                )}
+              </td>
+            )}
+            {tab === 'stringingOrders' && (
+              <td style={{ padding: '8px 10px' }}>
+                {row.Status !== 'done' && (
+                  <button
+                    className="option-pill"
+                    style={{ padding: '6px 10px', fontSize: 12 }}
+                    onClick={() => onMarkComplete(row.OrderID)}
+                  >
+                    Mark Complete
                   </button>
                 )}
               </td>
@@ -670,6 +691,125 @@ function CancelClassForm({ token, clinics, onCancelled }) {
         </button>
         <button className="submit-btn" style={{ background: 'var(--line)', color: 'var(--charcoal)' }} onClick={() => setOpen(false)}>
           Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StringingOrderForm({ token, onAdded }) {
+  const [open, setOpen] = useState(false);
+  const [strings, setStrings] = useState([]);
+  const [grips, setGrips] = useState([]);
+  const [racketDescription, setRacketDescription] = useState('');
+  const [stringId, setStringId] = useState('');
+  const [tension, setTension] = useState('');
+  const [gripAddOn, setGripAddOn] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [contactValue, setContactValue] = useState('');
+  const [dateReceived, setDateReceived] = useState(new Date().toISOString().slice(0, 10));
+  const [paymentMethod, setPaymentMethod] = useState('other');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      apiGet('strings').then((data) => setStrings(Array.isArray(data) ? data : []));
+      apiGet('grips').then((data) => setGrips(Array.isArray(data) ? data : []));
+    }
+  }, [open]);
+
+  function pickClient(s) {
+    setClientName(s.name);
+    setContactValue(s.email);
+  }
+
+  async function submit() {
+    setSubmitting(true);
+    await apiPost('adminAddStringingOrder', {
+      token, racketDescription, stringId, tension, gripAddOn,
+      clientName, contactValue, dateReceived, paymentMethod
+    });
+    setSubmitting(false);
+    setRacketDescription('');
+    setStringId('');
+    setTension('');
+    setGripAddOn('');
+    setClientName('');
+    setContactValue('');
+    setDateReceived(new Date().toISOString().slice(0, 10));
+    setPaymentMethod('other');
+    onAdded();
+    setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <div style={{ padding: '8px 20px 0' }}>
+        <button className="submit-btn" onClick={() => setOpen(true)}>+ Add Stringing Order</button>
+      </div>
+    );
+  }
+
+  const canSubmit = stringId && tension && clientName && dateReceived && paymentMethod;
+
+  return (
+    <div className="booking-form" style={{ paddingTop: 16 }}>
+      <div className="field">
+        <label>Client Name</label>
+        <ClientAutocomplete token={token} query={clientName} onQueryChange={setClientName} onPick={pickClient} placeholder="Start typing a name or email…" />
+      </div>
+      <div className="field">
+        <label>Email (optional — enables confirmation email)</label>
+        <input type="email" value={contactValue} onChange={(e) => setContactValue(e.target.value)} placeholder="you@example.com" />
+      </div>
+      <div className="field">
+        <label>Racket (optional)</label>
+        <input value={racketDescription} onChange={(e) => setRacketDescription(e.target.value)} placeholder="e.g. Wilson Blade 98" />
+      </div>
+      <div className="field">
+        <label>String</label>
+        <select value={stringId} onChange={(e) => setStringId(e.target.value)}>
+          <option value="">Choose a string</option>
+          {strings.map((s) => (
+            <option key={s.stringId} value={s.stringId}>{s.name} ({s.type}) — ${s.price}</option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label>Tension (lbs)</label>
+        <input type="number" min="40" max="70" value={tension} onChange={(e) => setTension(e.target.value)} placeholder="e.g. 52" />
+      </div>
+      {grips.length > 0 && (
+        <div className="field">
+          <label>Grip (optional)</label>
+          <select value={gripAddOn} onChange={(e) => setGripAddOn(e.target.value)}>
+            <option value="">No grip</option>
+            {grips.map((g) => (
+              <option key={g.gripId} value={g.gripId}>{g.name} — ${g.price}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div className="field">
+        <label>Date Received</label>
+        <input type="date" value={dateReceived} onChange={(e) => setDateReceived(e.target.value)} />
+      </div>
+      <div className="field">
+        <label>Payment Method</label>
+        <div className="option-row">
+          {['venmo', 'zelle', 'other'].map((m) => (
+            <div key={m} className={`option-pill ${paymentMethod === m ? 'active' : ''}`} onClick={() => setPaymentMethod(m)}>
+              {m[0].toUpperCase() + m.slice(1)}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="option-row">
+        <button className="submit-btn" disabled={!canSubmit || submitting} onClick={submit}>
+          {submitting ? 'Adding…' : 'Add Stringing Order'}
+        </button>
+        <button className="submit-btn" style={{ background: 'var(--line)', color: 'var(--charcoal)' }} onClick={() => setOpen(false)}>
+          Cancel
         </button>
       </div>
     </div>
