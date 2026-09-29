@@ -6,6 +6,7 @@ import Stringing from './Stringing.jsx';
 import Status from './Status.jsx';
 import Admin from './Admin.jsx';
 import Waiver from './Waiver.jsx';
+import Manage from './Manage.jsx';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -17,6 +18,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/status/:link" element={<Status />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/waiver" element={<Waiver />} />
+        <Route path="/manage/:token" element={<Manage />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

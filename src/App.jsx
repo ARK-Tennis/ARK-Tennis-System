@@ -338,14 +338,14 @@ function BookingForm({ clinic, grips }) {
   useEffect(() => {
     const requestId = ++availablePackRequestId.current;
     if (mode === 'single' && EMAIL_PATTERN.test(contactValue)) {
-      apiGet('myPack', { packGroup: clinic.packGroup, contactValue }).then((res) => {
+      apiGet('myPack', { packGroup: clinic.packGroup, contactValue, childName }).then((res) => {
         if (requestId !== availablePackRequestId.current) return; // a newer request already superseded this one
         setAvailablePack(res?.found ? res : null);
       });
     } else {
       setAvailablePack(null);
     }
-  }, [mode, contactValue, clinic]);
+  }, [mode, contactValue, childName, clinic]);
 
   useEffect(() => {
     setSelectedDate('');
@@ -387,7 +387,7 @@ function BookingForm({ clinic, grips }) {
   async function checkForExistingPack() {
     if (!contactValue) return;
     setCheckingPack(true);
-    const res = await apiGet('myPack', { packGroup: clinic.packGroup, contactValue });
+    const res = await apiGet('myPack', { packGroup: clinic.packGroup, contactValue, childName });
     setPackLookup(res);
     setCheckingPack(false);
   }

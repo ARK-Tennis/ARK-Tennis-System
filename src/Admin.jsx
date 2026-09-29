@@ -980,6 +980,7 @@ function WalkInForm({ token, clinics, onAdded }) {
   const [loadingDates, setLoadingDates] = useState(false);
   const [sessionDate, setSessionDate] = useState('');
   const [clientName, setClientName] = useState('');
+  const [childName, setChildName] = useState('');
   const [contactValue, setContactValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('other');
   const [submitting, setSubmitting] = useState(false);
@@ -1003,7 +1004,7 @@ function WalkInForm({ token, clinics, onAdded }) {
   async function checkPack() {
     if (!selectedClinic || !contactValue) return;
     setCheckingPack(true);
-    const res = await apiGet('myPack', { packGroup: selectedClinic.packGroup, contactValue });
+    const res = await apiGet('myPack', { packGroup: selectedClinic.packGroup, contactValue, childName });
     setPack(res);
     setCheckingPack(false);
   }
@@ -1018,13 +1019,14 @@ function WalkInForm({ token, clinics, onAdded }) {
     setSubmitting(true);
     const usingPack = paymentMethod === 'pack' && pack?.found;
     await apiPost('walkIn', {
-      token, clinicId, clientName, sessionDate,
+      token, clinicId, clientName, childName, sessionDate,
       paymentMethod: usingPack ? undefined : paymentMethod,
       contactValue,
       packId: usingPack ? pack.packId : undefined,
     });
     setSubmitting(false);
     setClientName('');
+    setChildName('');
     setContactValue('');
     setClinicId('');
     setSessionDate('');
@@ -1075,6 +1077,12 @@ function WalkInForm({ token, clinics, onAdded }) {
         <label>Client Name</label>
         <ClientAutocomplete token={token} query={clientName} onQueryChange={setClientName} onPick={pickClient} placeholder="Start typing a name or email…" />
       </div>
+      {selectedClinic?.category === 'Junior' && (
+        <div className="field">
+          <label>Child's Name</label>
+          <input value={childName} onChange={(e) => { setChildName(e.target.value); setPack(null); }} placeholder="Player's name" />
+        </div>
+      )}
       <div className="field">
         <label>Email (optional — needed to check for a pack)</label>
         <div style={{ display: 'flex', gap: 8 }}>
