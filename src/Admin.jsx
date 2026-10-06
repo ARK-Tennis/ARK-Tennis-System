@@ -79,6 +79,21 @@ function Dashboard({ token }) {
     refresh();
   }
 
+  async function deleteSignup(row) {
+    const when = row.SessionDate
+      ? new Date(row.SessionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : '';
+    const lines = ['Delete this booking?', '', `${row.ClientName} — ${row.ClinicID} — ${when}`, ''];
+    if (row.PaymentStatus === 'paid') lines.push('This booking is marked PAID. Deleting it does NOT refund any money.');
+    if (row.PlanType === 'pack') lines.push('It was paid with a pack, so the session goes back to that pack unless a cancellation already returned it.');
+    lines.push('A copy is saved in the DeletedSignups tab.');
+    if (!window.confirm(lines.join('\n'))) return false;
+    const res = await apiPost('adminDeleteSignup', { token, signupId: row.SignupID });
+    if (res.error) window.alert(res.error);
+    refresh();
+    return true;
+  }
+
   if (!data) return <div className="page"><div className="loading-state">Loading dashboard…</div></div>;
 
   return (
@@ -105,7 +120,7 @@ function Dashboard({ token }) {
       {tab === 'clinics' ? (
         <ClinicsEditor token={token} clinics={adminClinics} onSaved={refresh} />
       ) : tab === 'roster' ? (
-        <RosterTab token={token} clinics={adminClinics} onMarkPaid={markPaid} />
+        <RosterTab token={token} clinics={adminClinics} onMarkPaid={markPaid} onDelete={deleteSignup} />
       ) : tab === 'packLookup' ? (
         <PackLookupTab token={token} />
       ) : (
@@ -115,6 +130,7 @@ function Dashboard({ token }) {
             tab={tab}
             onMarkPaid={markPaid}
             onMarkComplete={markComplete}
+            onDelete={deleteSignup}
           />
         </div>
       )}
@@ -133,7 +149,7 @@ const SHEET_META = {
   makeupCredits: { idCol: 'CreditID', columns: ['ClientName', 'OriginClinicID', 'OriginDate', 'Status', 'ExpiryDate'] },
 };
 
-function DataTable({ rows, tab, onMarkPaid, onMarkComplete }) {
+function DataTable({ rows, tab, onMarkPaid, onMarkComplete, onDelete }) {
   const meta = SHEET_META[tab];
   if (!rows || rows.length === 0) return <div className="empty-state">Nothing here yet.</div>;
 
@@ -148,6 +164,7 @@ function DataTable({ rows, tab, onMarkPaid, onMarkComplete }) {
           ))}
           {meta.columns.includes('PaymentStatus') && <th style={{ padding: '8px 10px', borderBottom: '2px solid var(--line)' }} />}
           {tab === 'stringingOrders' && <th style={{ padding: '8px 10px', borderBottom: '2px solid var(--line)' }} />}
+          {tab === 'signups' && <th style={{ padding: '8px 10px', borderBottom: '2px solid var(--line)' }} />}
         </tr>
       </thead>
       <tbody>
@@ -180,6 +197,17 @@ function DataTable({ rows, tab, onMarkPaid, onMarkComplete }) {
                     Mark Complete
                   </button>
                 )}
+              </td>
+            )}
+            {tab === 'signups' && (
+              <td style={{ padding: '8px 10px' }}>
+                <button
+                  className="option-pill"
+                  style={{ padding: '6px 10px', fontSize: 12, color: 'var(--error)' }}
+                  onClick={() => onDelete(row)}
+                >
+                  Delete
+                </button>
               </td>
             )}
           </tr>
@@ -305,7 +333,7 @@ function PackLookupTab({ token }) {
   );
 }
 
-function RosterTab({ token, clinics, onMarkPaid }) {
+function RosterTab({ token, clinics, onMarkPaid, onDelete }) {
   const [selectedClinic, setSelectedClinic] = useState(null);
   const [dates, setDates] = useState([]);
   const [loadingDates, setLoadingDates] = useState(false);
@@ -335,6 +363,11 @@ function RosterTab({ token, clinics, onMarkPaid }) {
 
   async function markPaidAndRefresh(signupId) {
     await onMarkPaid('Signups', signupId, 'SignupID');
+    pickDate(selectedDate);
+  }
+
+  async function deleteAndRefresh(row) {
+    await onDelete(row);
     pickDate(selectedDate);
   }
 
@@ -406,11 +439,16 @@ function RosterTab({ token, clinics, onMarkPaid }) {
                 <td style={{ padding: '8px 10px' }}>{row.PaymentMethod}</td>
                 <td style={{ padding: '8px 10px' }}>{row.PaymentStatus}</td>
                 <td style={{ padding: '8px 10px' }}>
-                  {row.PaymentStatus === 'pending' && (
-                    <button className="option-pill" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => markPaidAndRefresh(row.SignupID)}>
-                      Mark Paid
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {row.PaymentStatus === 'pending' && (
+                      <button className="option-pill" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => markPaidAndRefresh(row.SignupID)}>
+                        Mark Paid
+                      </button>
+                    )}
+                    <button className="option-pill" style={{ padding: '6px 10px', fontSize: 12, color: 'var(--error)' }} onClick={() => deleteAndRefresh(row)}>
+                      Delete
                     </button>
-                  )}
+                  </div>
                 </td>
               </tr>
             ))}
