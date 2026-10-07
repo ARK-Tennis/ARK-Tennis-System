@@ -88,8 +88,16 @@ function Dashboard({ token }) {
     if (row.PlanType === 'pack') lines.push('It was paid with a pack, so the session goes back to that pack unless a cancellation already returned it.');
     lines.push('A copy is saved in the DeletedSignups tab.');
     if (!window.confirm(lines.join('\n'))) return false;
-    const res = await apiPost('adminDeleteSignup', { token, signupId: row.SignupID });
-    if (res.error) window.alert(res.error);
+    try {
+      const res = await apiPost('adminDeleteSignup', { token, signupId: row.SignupID });
+      if (res.error) {
+        window.alert(`Delete failed: ${res.error}`);
+      } else if (!res.success) {
+        window.alert('Delete failed: unexpected response from the server. The backend may need to be redeployed as a new version.');
+      }
+    } catch (err) {
+      window.alert(`Delete failed: could not get a valid reply from the server (${err.message || err}). The backend may need to be redeployed as a new version.`);
+    }
     refresh();
     return true;
   }
