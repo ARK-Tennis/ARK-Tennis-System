@@ -407,7 +407,7 @@ function BookingForm({ clinic, grips }) {
         (paymentMethod !== 'pack' || !!availablePack) &&
         waiverReady && selectedDate && (!isJunior || childName)
       : usingExistingPack
-      ? selectedDates.length > 0 && (!isJunior || childName)
+      ? selectedDates.length > 0 && waiverReady && (!isJunior || childName)
       : buyingNewPack
       ? clientName && validEmail && paymentMethod && waiverReady && !!selectedPackSize && (!isJunior || childName)
       : false;
@@ -429,6 +429,7 @@ function BookingForm({ clinic, grips }) {
               planType: 'pack',
               packId: packLookup.packId,
               sessionDate: date,
+              waiverAccepted: waiverChecked,
             });
             if (res.error) failed.push({ date, message: res.error });
             else succeeded.push({ date, ...res });
@@ -460,6 +461,7 @@ function BookingForm({ clinic, grips }) {
           planType: 'pack',
           packId: availablePack.packId,
           sessionDate: selectedDate,
+          waiverAccepted: waiverChecked,
         });
         if (res.error) setResult({ type: 'error', message: res.error });
         else setResult({ type: 'single', ...res });
@@ -675,6 +677,8 @@ function BookingForm({ clinic, grips }) {
               </div>
             )}
           </div>
+
+          <WaiverGate contactValue={contactValue} checked={waiverChecked} onCheckedChange={setWaiverChecked} onReadyChange={setWaiverReady} />
         </>
       )}
 
@@ -793,9 +797,12 @@ function Confirmation({ result }) {
           <p>Booked: {result.succeeded.map((s) => s.date).join(', ')} — all covered by your pack, nothing more to pay.</p>
         )}
         {result.failed.length > 0 && (
-          <p style={{ color: 'var(--error)' }}>
-            Couldn't book: {result.failed.map((f) => f.date).join(', ')} — likely ran out of pack sessions or a spot filled up. Contact us if you'd still like these.
-          </p>
+          <div style={{ color: 'var(--error)' }}>
+            {result.failed.map((f) => (
+              <p key={f.date} style={{ margin: '0 0 6px' }}>Couldn't book {f.date}: {f.message || 'something went wrong'}</p>
+            ))}
+            <p style={{ margin: 0 }}>Contact us if you'd still like these.</p>
+          </div>
         )}
         {result.succeeded[0]?.statusLink && (
           <p style={{ fontSize: 13, marginTop: 12 }}>
