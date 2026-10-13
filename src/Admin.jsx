@@ -1024,7 +1024,7 @@ function WalkInForm({ token, clinics, onAdded }) {
   const [clinicId, setClinicId] = useState('');
   const [dates, setDates] = useState([]);
   const [loadingDates, setLoadingDates] = useState(false);
-  const [sessionDate, setSessionDate] = useState('');
+  const [selectedDates, setSelectedDates] = useState([]);
   const [clientName, setClientName] = useState('');
   const [childName, setChildName] = useState('');
   const [contactValue, setContactValue] = useState('');
@@ -1032,11 +1032,12 @@ function WalkInForm({ token, clinics, onAdded }) {
   const [submitting, setSubmitting] = useState(false);
   const [pack, setPack] = useState(null); // null = not checked, {found:false/true,...}
   const [checkingPack, setCheckingPack] = useState(false);
+  const [markPaid, setMarkPaid] = useState(false);
 
   const selectedClinic = clinics.find((c) => c.clinicId === clinicId);
 
   useEffect(() => {
-    setSessionDate('');
+    setSelectedDates([]);
     setDates([]);
     if (clinicId) {
       setLoadingDates(true);
@@ -1064,21 +1065,42 @@ function WalkInForm({ token, clinics, onAdded }) {
   async function submit() {
     setSubmitting(true);
     const usingPack = paymentMethod === 'pack' && pack?.found;
-    await apiPost('walkIn', {
-      token, clinicId, clientName, childName, sessionDate,
-      paymentMethod: usingPack ? undefined : paymentMethod,
-      contactValue,
-      packId: usingPack ? pack.packId : undefined,
-    });
+    const failedDates = [];
+    const failureNotes = [];
+    // One walk-in booking per selected date, in date order (so a pack is drawn down oldest-date first).
+    for (const date of [...selectedDates].sort()) {
+      try {
+        const res = await apiPost('walkIn', {
+          token, clinicId, clientName, childName, sessionDate: date,
+          paymentMethod: usingPack ? undefined : paymentMethod,
+          contactValue,
+          packId: usingPack ? pack.packId : undefined,
+          markPaid: markPaid && (paymentMethod === 'venmo' || paymentMethod === 'zelle'),
+        });
+        if (res.error) { failedDates.push(date); failureNotes.push(`${date}: ${res.error}`); }
+      } catch (err) {
+        failedDates.push(date);
+        failureNotes.push(`${date}: could not reach the server`);
+      }
+    }
     setSubmitting(false);
+    onAdded();
+
+    if (failedDates.length > 0) {
+      // Keep the form open with only the dates that didn't go through, so nothing has to be retyped.
+      window.alert(`${selectedDates.length - failedDates.length} of ${selectedDates.length} walk-ins added. These did not go through:\n\n${failureNotes.join('\n')}`);
+      setSelectedDates(failedDates);
+      return;
+    }
+
+    setMarkPaid(false);
     setClientName('');
     setChildName('');
     setContactValue('');
     setClinicId('');
-    setSessionDate('');
+    setSelectedDates([]);
     setPack(null);
     setPaymentMethod('other');
-    onAdded();
     setOpen(false);
   }
 
@@ -1090,7 +1112,10 @@ function WalkInForm({ token, clinics, onAdded }) {
     );
   }
 
-  const canSubmit = clinicId && sessionDate && clientName && (paymentMethod !== 'pack' || pack?.found);
+  // A pack can only cover as many dates as it has sessions left.
+  const packLimit = paymentMethod === 'pack' && pack?.found ? Number(pack.sessionsRemaining) : Infinity;
+  const canSubmit = clinicId && selectedDates.length > 0 && clientName &&
+    (paymentMethod !== 'pack' || (pack?.found && selectedDates.length <= packLimit));
 
   return (
     <div className="booking-form" style={{ paddingTop: 16 }}>
@@ -1105,17 +1130,40 @@ function WalkInForm({ token, clinics, onAdded }) {
       </div>
       {clinicId && (
         <div className="field">
-          <label>Date</label>
+          <label>Dates (select one or more){selectedDates.length > 0 ? ` — ${selectedDates.length} selected` : ''}</label>
           {loadingDates && <div className="loading-state">Loading dates…</div>}
           {!loadingDates && (
-            <select value={sessionDate} onChange={(e) => setSessionDate(e.target.value)}>
-              <option value="">Choose a date</option>
-              {dates.map((d) => (
-                <option key={d.date} value={d.date}>
-                  {d.date}{d.past ? ' (already happened)' : ''} — {d.spotsLeft} spots left
-                </option>
-              ))}
-            </select>
+            <div>
+              {dates.map((d) => {
+                const checked = selectedDates.includes(d.date);
+                const atLimit = !checked && selectedDates.length >= packLimit;
+                return (
+                  <label
+                    key={d.date}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', marginBottom: 6,
+                      border: '1px solid var(--line)', borderRadius: 10,
+                      background: checked ? 'rgba(27, 58, 46, 0.08)' : 'transparent',
+                      opacity: atLimit ? 0.5 : 1, cursor: atLimit ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={atLimit}
+                      onChange={() => setSelectedDates((prev) => (checked ? prev.filter((x) => x !== d.date) : [...prev, d.date]))}
+                    />
+                    <span style={{ flex: 1 }}>{d.date}{d.past ? ' (already happened)' : ''}</span>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>{d.spotsLeft} spots left</span>
+                  </label>
+                );
+              })}
+              {packLimit !== Infinity && (
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                  This pack has {packLimit} session{packLimit === 1 ? '' : 's'} left, so you can select up to {packLimit} date{packLimit === 1 ? '' : 's'}.
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -1160,6 +1208,19 @@ function WalkInForm({ token, clinics, onAdded }) {
           ))}
         </div>
       </div>
+      {(paymentMethod === 'venmo' || paymentMethod === 'zelle') && (
+        <div className="field">
+          <label>Payment already received?</label>
+          <div className="option-row">
+            <div className={`option-pill ${markPaid ? 'active' : ''}`} onClick={() => setMarkPaid(!markPaid)}>
+              {markPaid ? '✓ Marked as paid' : 'Mark as paid'}
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
+            Left unmarked, it stays pending until the payment email is matched or you mark it paid later.
+          </div>
+        </div>
+      )}
       <div className="option-row">
         <button className="submit-btn" disabled={!canSubmit || submitting} onClick={submit}>
           {submitting ? 'Adding…' : 'Add Walk-In'}
