@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { apiGet, apiPost } from './api.js';
+import RainOutToggle from './RainOutToggle.jsx';
 
 const TOKEN_KEY = 'ark_admin_token';
 
@@ -112,6 +113,7 @@ function Dashboard({ token }) {
         <div className="net-cord" />
       </header>
 
+      <RainOutToggle token={token} />
       <WalkInForm token={token} clinics={clinics} onAdded={refresh} />
       <ManualPackForm token={token} clinics={adminClinics} onAdded={refresh} />
       <StringingOrderForm token={token} onAdded={refresh} />

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { apiGet, apiPost } from './api.js';
+import WeatherBanner from './WeatherBanner.jsx';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -38,6 +39,8 @@ export default function App() {
         <p>Book a clinic, string a racket, get on court.</p>
         <div className="net-cord" />
       </header>
+
+      <WeatherBanner />
 
       <div className="category-toggle">
         <button
