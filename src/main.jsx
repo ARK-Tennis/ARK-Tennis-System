@@ -7,6 +7,8 @@ import Status from './Status.jsx';
 import Admin from './Admin.jsx';
 import Waiver from './Waiver.jsx';
 import Manage from './Manage.jsx';
+import CalendarAdmin from './CalendarAdmin.jsx';
+import Lessons from './Lessons.jsx';
 import './styles.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -19,6 +21,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/admin" element={<Admin />} />
         <Route path="/waiver" element={<Waiver />} />
         <Route path="/manage/:token" element={<Manage />} />
+        <Route path="/calendar" element={<CalendarAdmin />} />
+        <Route path="/lessons" element={<Lessons />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

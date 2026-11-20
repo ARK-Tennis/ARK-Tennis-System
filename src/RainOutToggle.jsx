@@ -42,8 +42,8 @@ export default function RainOutToggle({ token }) {
       </button>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
         {on
-          ? 'Everyone sees "Rained out today" on the booking page until midnight. This does not cancel any classes.'
-          : "Shows a rain-out notice on the booking page for today only. It does not cancel any classes."}
+          ? 'Everyone sees a scrolling "Courts are currently wet" banner on the booking page until midnight. This does not cancel any classes.'
+          : "Shows a scrolling \"Courts are wet\" banner on the booking page for today only. It does not cancel any classes."}
       </div>
     </div>
   );
