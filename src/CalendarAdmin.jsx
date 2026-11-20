@@ -86,6 +86,7 @@ function CalendarApp({ session, onLogout }) {
   const [panel, setPanel] = useState(null); // 'calendars' | 'requests' | 'settings'
   const [requests, setRequests] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [totalsView, setTotalsView] = useState('month'); // 'day' | 'week' | 'month'
   const { get, post } = useApi(session, onLogout);
 
   const grid = useMemo(() => monthGrid(anchor), [monthOf(anchor)]); // eslint-disable-line
@@ -116,6 +117,21 @@ function CalendarApp({ session, onLogout }) {
 
   const pending = requests.filter((r) => r.status === 'pending').length;
   const today = todayStr();
+
+  // Revenue counted only for the selected day, week (Sun–Sat) or month.
+  const weekStartD = addDays(anchor, -weekday(anchor));
+  const period = totalsView === 'day'
+    ? { from: anchor, to: anchor, label: longDay(anchor) }
+    : totalsView === 'week'
+      ? { from: weekStartD, to: addDays(weekStartD, 6), label: `${shortDay(weekStartD)} – ${shortDay(addDays(weekStartD, 6))}` }
+      : { from: `${month}-01`, to: `${month}-31`, label: monthLabel(anchor) };
+  const periodTotals = useMemo(() => {
+    const t = {};
+    data.items.forEach((i) => {
+      if (i.date >= period.from && i.date <= period.to) t[i.calendarId] = (t[i.calendarId] || 0) + (Number(i.amount) || 0);
+    });
+    return t;
+  }, [data.items, period.from, period.to]);
 
   function step(delta) { setAnchor((a) => (view === 'month' ? shiftMonth(a, delta) : addDays(a, delta * 7))); }
 
@@ -149,9 +165,9 @@ function CalendarApp({ session, onLogout }) {
           <button className="cal-btn" onClick={() => step(1)} aria-label="Next">›</button>
         </div>
         <div className="cal-row">
-          <button className={`cal-btn small ${view === 'month' ? 'active' : ''}`} onClick={() => setView('month')}>Month</button>
-          <button className={`cal-btn small ${view === 'week' ? 'active' : ''}`} onClick={() => setView('week')}>Week</button>
-          <button className="cal-btn small" onClick={() => setAnchor(today)}>Today</button>
+          <button className={`cal-btn small ${view === 'month' ? 'active' : ''}`} onClick={() => { setView('month'); setTotalsView('month'); }}>Month</button>
+          <button className={`cal-btn small ${view === 'week' ? 'active' : ''}`} onClick={() => { setView('week'); setTotalsView('week'); }}>Week</button>
+          <button className="cal-btn small" onClick={() => { setAnchor(today); setTotalsView('day'); }}>Today</button>
           <span style={{ flex: 1 }} />
           <button className="cal-btn small primary" onClick={() => newEvent(anchor)}>+ Add</button>
         </div>
@@ -163,11 +179,16 @@ function CalendarApp({ session, onLogout }) {
             <div key={c.calendarId} className="cal-chip">
               <span className="cal-dot" style={{ background: c.color }} />
               <span>{c.name}</span>
-              <b>{money(data.totals && data.totals[c.calendarId])}</b>
+              <b>{money(periodTotals[c.calendarId])}</b>
             </div>
           ))}
         </div>
-        <div className="cal-note">Totals are for {monthLabel(anchor)}.{data.calendars.some((c) => c.type === 'rptc') ? ' RPTC is a plain sum for now.' : ''}</div>
+        <div className="cal-row">
+          {[['day', 'Day'], ['week', 'Week'], ['month', 'Month']].map(([v, l]) => (
+            <button key={v} className={`cal-btn small ${totalsView === v ? 'active' : ''}`} onClick={() => setTotalsView(v)}>{l} total</button>
+          ))}
+        </div>
+        <div className="cal-note">Totals for {period.label}.{data.calendars.some((c) => c.type === 'rptc') ? ' RPTC is a plain sum for now.' : ''}</div>
 
         {view === 'month' && (
           <div className="cal-grid" aria-busy={loading}>
@@ -237,7 +258,7 @@ function DayPanel({ date, items, calById, onEdit, onAdd, compact }) {
               <span className="nm">{i.name}{i.auto ? ' (auto)' : ''}</span>
               <span className="tm">
                 {i.startTime ? `${fmtTime(i.startTime)} – ${fmtTime(i.endTime)}` : 'All day'}
-                {cal ? ` · ${cal.name}` : ''}{i.repeat !== 'none' ? ' · repeats' : ''}
+                {cal ? ` · ${cal.name}` : ''}{i.auto ? ` · ${i.players} player${i.players === 1 ? '' : 's'}` : ''}{i.repeat !== 'none' ? ' · repeats' : ''}
               </span>
             </span>
             {i.amount > 0 && <span className="amt">{money(i.amount)}</span>}
