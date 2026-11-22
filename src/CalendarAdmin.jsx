@@ -139,14 +139,14 @@ function CalendarApp({ session, onLogout }) {
     const first = data.calendars[0];
     setEditing({
       eventId: null, calendarId: first ? first.calendarId : '', name: '', amount: '', date,
-      startTime: '09:00', endTime: '10:00', repeat: 'none', repeatUntil: '', occurrenceDate: date, scope: 'all',
+      allDay: false, startTime: '09:00', endTime: '10:00', repeat: 'none', repeatUntil: '', occurrenceDate: date, scope: 'all',
     });
   }
   function editItem(i) {
     if (i.auto) return;
     setEditing({
       eventId: i.eventId, calendarId: i.calendarId, name: i.name, amount: i.amount || '', date: i.date,
-      startTime: i.startTime, endTime: i.endTime, repeat: i.repeat, repeatUntil: i.repeatUntil, occurrenceDate: i.date,
+      allDay: !i.startTime, startTime: i.startTime || '09:00', endTime: i.endTime || '10:00', repeat: i.repeat, repeatUntil: i.repeatUntil, occurrenceDate: i.date,
       scope: i.repeat !== 'none' ? 'this' : 'all',
     });
   }
@@ -325,10 +325,13 @@ function EventSheet({ draft, calendars, post, onClose, onDone }) {
         <div className="field"><label>Amount ($)</label><input type="number" inputMode="decimal" min="0" step="0.01" value={f.amount} onChange={(e) => set('amount', e.target.value)} placeholder="80" /></div>
       </div>
       <div className="field"><label>Date</label><input type="date" value={f.date} onChange={(e) => set('date', e.target.value)} /></div>
-      <div className="cal-two">
-        <div className="field"><label>Start</label><input type="time" value={f.startTime} onChange={(e) => changeStart(e.target.value)} /></div>
-        <div className="field"><label>End</label><input type="time" value={f.endTime} onChange={(e) => set('endTime', e.target.value)} /></div>
-      </div>
+      <label className="cal-check" style={{ fontSize: 15 }}><input type="checkbox" checked={!!f.allDay} onChange={(e) => set('allDay', e.target.checked)} /> All day (every hour of the day)</label>
+      {!f.allDay && (
+        <div className="cal-two">
+          <div className="field"><label>Start</label><input type="time" value={f.startTime} onChange={(e) => changeStart(e.target.value)} /></div>
+          <div className="field"><label>End</label><input type="time" value={f.endTime} onChange={(e) => set('endTime', e.target.value)} /></div>
+        </div>
+      )}
       <div className="cal-two">
         <div className="field">
           <label>Repeat</label>
