@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { apiGet, apiPost } from './api.js';
 import RainOutToggle from './RainOutToggle.jsx';
+import GiftAdmin from './GiftAdmin.jsx';
 
 const TOKEN_KEY = 'ark_admin_token';
 
@@ -117,6 +118,7 @@ function Dashboard({ token }) {
       <WalkInForm token={token} clinics={clinics} onAdded={refresh} />
       <ManualPackForm token={token} clinics={adminClinics} onAdded={refresh} />
       <StringingOrderForm token={token} onAdded={refresh} />
+      <GiftAdmin token={token} signups={data.signups} clinics={clinics} onApplied={refresh} />
       <CancelClassForm token={token} clinics={clinics} onCancelled={refresh} />
 
       <div className="category-toggle" style={{ margin: '20px 20px 4px' }}>

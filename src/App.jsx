@@ -108,6 +108,7 @@ export default function App() {
 
       <nav className="footer-nav">
         <Link to="/stringing" className="stringing-link">String a Racket</Link>
+        <Link to="/gift-certificates" className="stringing-link">Gift Certificates</Link>
       </nav>
     </div>
   );
