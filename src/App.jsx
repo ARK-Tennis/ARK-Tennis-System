@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPost } from './api.js';
 import WeatherBanner from './WeatherBanner.jsx';
 
@@ -12,6 +12,7 @@ const PAYMENT_METHODS = [
 ];
 
 export default function App() {
+  const navigate = useNavigate();
   const [category, setCategory] = useState('Junior'); // 'Junior' | 'Adult' | 'Packs'
   const [clinics, setClinics] = useState([]);
   const [loadingClinics, setLoadingClinics] = useState(true);
@@ -61,6 +62,8 @@ export default function App() {
         >
           Packs
         </button>
+        <button onClick={() => navigate('/stringing')}>Stringing</button>
+        <button onClick={() => navigate('/gift-certificates')}>Gifts</button>
       </div>
 
       {category === 'Packs' ? (
@@ -106,10 +109,6 @@ export default function App() {
         </>
       )}
 
-      <nav className="footer-nav">
-        <Link to="/stringing" className="stringing-link">String a Racket</Link>
-        <Link to="/gift-certificates" className="stringing-link">Gift Certificates</Link>
-      </nav>
     </div>
   );
 }

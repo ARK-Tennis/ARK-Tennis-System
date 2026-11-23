@@ -124,11 +124,11 @@ a { color: inherit; }
   flex: 1;
   border: none;
   background: transparent;
-  padding: 10px 14px;
+  padding: 10px 4px;
   border-radius: 999px;
   font-family: var(--font-body);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--muted);
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
